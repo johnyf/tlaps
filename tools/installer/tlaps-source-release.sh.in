@@ -1,0 +1,46 @@
+#!/bin/bash
+
+TLAPSVER=$(echo "tlaps-@VERSION@" | sed -e 's/ /_/g')
+TARGET="`/bin/pwd`/$TLAPSVER.tar.gz"
+echo $TARGET
+
+cat <<EOF
+
+This script builds a source distribution of the TLA+ Proof System
+version @VERSION@.
+
+EOF
+
+if test -z "$MSR_SVN_USER" ; then
+    MSR_SVN_USER="$USER"
+fi
+
+repos="svn+ssh://$MSR_SVN_USER@svn.msr-inria.inria.fr/var/lib/svn/repository/tla"
+
+function svn_export() {
+   repo_path="$repos/$1"
+   target=$2
+   svn export -q "$repo_path" "$target"
+}
+
+################################################################################
+
+TLAPS_DIR="/tmp/$TLAPSVER"
+
+rm -rf "$TLAPS_DIR"
+mkdir -p "$TLAPS_DIR"
+cd "$TLAPS_DIR"
+svn_export trunk/isabelle isabelle
+svn_export trunk/tlapm tlapm
+rm -rf tlapm/bugs tlapm/bugs-archive tlapm/fixed-bugs tlapm/doc
+svn_export trunk/zenon zenon
+mkdir -p emacs
+svn_export trunk/misc/tla-mode emacs/tla-mode
+cd ..
+tar -czf "$TARGET" "$TLAPSVER"
+
+cat <<EOF
+
+Created: $TARGET
+
+EOF
