@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32215 $";;
+Revision.f "$Rev: 34585 $";;
 
 open Ext
 
@@ -88,9 +88,9 @@ let set_expr vis f cx =
     | Some (h, hs) ->
         let f = app_expr (shift (-1)) f in
         let h = begin match h.core with
-          | Fact (hf, hv) when Expr.Eq.expr hf f ->
+          | Fact (hf, hv, tm) when Expr.Eq.expr hf f ->
               succ := true ;
-              Fact (hf, vis)
+              Fact (hf, vis, tm)
           | Fresh (hx, shp, hk, Bounded (hran, hv)) when domain_match f hran ->
               succ := true ;
               Fresh (hx, shp, hk, Bounded (hran, vis))
@@ -122,7 +122,7 @@ let assumed_facts offset sq =
     | None -> ()
     | Some (hs, h) -> begin
         match h.core with
-          | Fact (e, Visible) ->
+          | Fact (e, Visible, _) ->
               exprs := app_expr (shift offset) e :: !exprs ;
               scan (offset + 1) hs
           | _ ->
@@ -134,7 +134,7 @@ let assumed_facts offset sq =
 (* The following is the core of the PM. Understand it, and you've
    understood pretty much everything about the proof language. *)
 
-let prove_assertion ~suffices cx goal asq =
+let prove_assertion ~suffices cx goal asq time_flag =
   let stepno = Property.get asq Props.step in
   let is_anon = match stepno with Named (_, _, true) -> true | _ -> false in
   let stepnm = string_of_stepno stepno @@ asq in
@@ -149,33 +149,49 @@ let prove_assertion ~suffices cx goal asq =
         Visible
       else Hidden
   in
+  (* we need to compute the new time_flag based on the hyps of the sequent (asq)
+   * *)
   let hyps = Deque.map begin
     fun _ h -> match h.core with
-      | Fact (f, _) ->
-          Fact (f, vis) @@ h
+      | Fact (f, _, tm) ->
+          Fact (f, vis, tm) @@ h
       | _ -> h
   end asq.core.context in
+  (* here we add the asserted sequent assumptions to the context and they are
+   * visible if they are anon *)
+  (* the time is taken to be the flag because sequents get the time of the flag
+   * always *)
   let cx = Deque.append cx hyps in
-  let noldfac = Fact (Apply (Internal Builtin.Neg @@ asq, [
-                               app_expr (shift (Deque.size hyps)) goal
-                             ]) @@ asq,
-                      Hidden) @@ asq in
+  (*
+   * The above is commented out in order to fix the soundness bug with regard
+   * to not being able to approximate boxing correctly when adding the negation
+   * of goals to the hyps
+   *)
+    (*let f = Apply (Internal Builtin.Neg @@ asq, [
+    app_expr (shift (Deque.size hyps)) goal
+  ]) @@ asq in
+  *)
+  let f = Internal Builtin.TRUE @@ asq in
+  let noldfac = Fact (f, Hidden, time_flag) @@ asq in
   let cx = Deque.snoc cx noldfac in
-  let stbod = assumed_facts 2 asq.core @@ asq in
-  let stdef = Defn (Operator (stepnm, stbod) @@ asq,
-                    Proof, Visible, Local) @@ asq in
-  let cx = Deque.snoc cx stdef in
-  let cx = Deque.snoc cx (Fact (Ix 1 @@ asq, Hidden) @@ asq) in
-  let goal = app_expr (shift 3) asq.core.active in
-  (cx, goal)
 
-let use_assertion ~suffices cx goal asq =
+  let stbod = assumed_facts 2 asq.core @@ asq in
+  let time_flag = Expr.Temporal_props.check_time_change asq.core.context time_flag in
+  let stdef = Defn (Operator (stepnm, stbod) @@ asq,
+                    Proof time_flag , Visible, Local) @@ asq in
+  let cx = Deque.snoc cx stdef in
+  let f = Ix 1 @@ asq in
+  let cx = Deque.snoc cx (Fact (f, Hidden, time_flag) @@ asq) in
+   let goal = app_expr (shift 3) asq.core.active in
+  (cx, goal, time_flag)
+
+let use_assertion ~suffices cx goal asq time_flag =
   let stepno = Property.get asq Props.step in
   let is_anon = match stepno with Named (_, _, true) -> true | _ -> false in
   let stepnm = string_of_stepno stepno @@ asq in
   let stbod = exprify asq.core @@ asq in
   let stdef = Defn (Operator (stepnm, stbod) @@ asq,
-                    Proof, Visible, Local) @@ asq in
+                    Proof time_flag, Visible, Local) @@ asq in
   let cx = Deque.snoc cx stdef in
   let vis =
     if suffices then
@@ -190,7 +206,9 @@ let use_assertion ~suffices cx goal asq =
         Visible
       else Hidden
   in
-  let cx = Deque.snoc cx (Fact (Ix 1 @@ asq, vis) @@ asq) in
+  (* here we add the assertion as a fact in order to prove the goal *)
+  let f = Ix 1 @@ asq in
+  let cx = Deque.snoc cx (Fact (f, vis, time_flag) @@ asq) in
   let goal = app_expr (shift 2) goal in
   (cx, goal)
 
@@ -212,85 +230,107 @@ and get_steps_step stp =
 
 (********************************************************)
 
-let rec generate (sq : sequent) prf =
+let rec generate (sq : sequent) prf time_flag =
   let prf = assign prf Props.goal sq in
-  match prf.core with
-    | Obvious ->
-        let ob = obligate (sq @@ prf) Ob_main in
-        assign prf Props.obs [ob]
-    | Omitted h ->
-        begin match h with
-          | Explicit ->
-              Stats.omitted := (Util.get_locus prf) :: !Stats.omitted
-          | Implicit ->
-              Stats.absent := (Util.get_locus prf) :: !Stats.absent
-          | Elsewhere _ ->
-              ()
-        end;
-        prf
-    | Steps (inits, qed) ->
-        let (sq, inits) = List.fold_left gen_step (sq, []) inits in
-        let inits = List.rev inits in
-        let qed_prf = generate sq (get_qed_proof qed) in
-        Steps (inits, {core = Qed qed_prf; props = qed_prf.props}) @@ prf
-    | By _ ->
-        Errors.bug ~at:prf "Proof.Gen.generate"
-    | Error msg ->
-        let ob = obligate (sq @@ prf) (Ob_error msg) in
-        assign prf Props.obs [ob]
+  let loc = Util.get_locus prf in
+  if not (List.mem (Filename.basename loc.Loc.file) !Params.input_files)
+     || Loc.line loc.Loc.stop < !Params.tb_sl
+     || Loc.line loc.Loc.start > !Params.tb_el
+  then
+    prf
+  else begin
+    match prf.core with
+      | Obvious ->
+          let ob = obligate (sq @@ prf) Ob_main in
+          assign prf Props.obs [ob]
+      | Omitted h ->
+          begin match h with
+            | Explicit ->
+                Stats.omitted := (Util.get_locus prf) :: !Stats.omitted
+            | Implicit ->
+                Stats.absent := (Util.get_locus prf) :: !Stats.absent
+            | Elsewhere _ ->
+                ()
+          end;
+          prf
+      | Steps (inits, qed) ->
+          let (sq, inits, time_flag) = List.fold_left gen_step (sq, [], time_flag) inits in
+          let inits = List.rev inits in
+          let qed_prf = generate sq (get_qed_proof qed) time_flag in
+          Steps (inits, {core = Qed qed_prf; props = qed_prf.props}) @@ prf
+      | By _ ->
+          Errors.bug ~at:prf "Proof.Gen.generate"
+      | Error msg ->
+          let ob = obligate (sq @@ prf) (Ob_error msg) in
+          assign prf Props.obs [ob]
+  end
 
-and gen_step (sq, inits) stp =
+and gen_step (sq, inits, time_flag) stp =
   let stp = assign stp Props.goal sq in
   match stp.core with
     | Forget k ->
         let nfacts = Deque.size sq.context in
         let sq = { sq with context = Deque.map begin
                      fun n h -> match h.core with
-                       | Fact (e, Visible) when k + n < nfacts ->
-                           Fact (e, Hidden) @@ h
+                       | Fact (e, Visible, tm) when k + n < nfacts ->
+                           Fact (e, Hidden, tm) @@ h
                        | _ -> h
                    end sq.context }
         in
-        (sq, stp :: inits)
+        (sq, stp :: inits, time_flag)
     | Use ({defs = []; facts = [f]}, _) ->
         let fob = obligate ({sq with active = f} @@ stp) Ob_support in
+        (* since we might be in a Now scope but the fact from an earlier Always
+         * scope, we must search for it in the context and take the right scope
+         * *)
+        let tm = match f.core with
+        | Ix n ->
+            assert (n <= Deque.size sq.context && n > 0);
+            begin match Deque.nth ~backwards:true sq.context (n - 1) with
+            | Some {core = (Fact (_,_,tm) | Defn (_,Proof tm,_,_))} -> tm
+            | e -> Always (* all other options are with Always scope*) end
+        | _ -> time_flag (* the rest are expressions which get the current scope *) in
         let stp = assign stp Props.obs [fob] in
-        let sq = {context = Deque.snoc sq.context (Fact (f, Visible) @@ f);
+        let sq = {context = Deque.snoc sq.context (Fact (f, Visible, tm) @@ f);
                   active = app_expr (shift 1) sq.active}
         in
-        (sq, stp :: inits)
+        (sq, stp :: inits, time_flag)
     | Use ({facts = []} as us, _) ->
         let sq = { sq with context = begin
                      List.fold_left (set_defn (Visible)) sq.context us.defs
                    end } in
-        (sq, stp :: inits)
+        (sq, stp :: inits, time_flag)
     | Use (_, _) -> assert false
     | Hide us ->
         let cx = List.fold_left (set_defn Hidden) sq.context us.defs in
         let cx = List.fold_right (set_expr Hidden) us.facts cx in
-        ({ sq with context = cx }, stp :: inits)
+        ({ sq with context = cx }, stp :: inits, time_flag)
     | Define dfs ->
         let sq = {
           context = Deque.append_list sq.context
             (List.map (fun d -> Defn (d, User, Visible, Local) @@ d) dfs) ;
           active = app_expr (shift (List.length dfs)) sq.active ;
-        } in (sq, stp :: inits)
+        } in (sq, stp :: inits, time_flag)
     | Assert (asq, prf) ->
         let prf =
-          let (cx, goal) = prove_assertion ~suffices:false sq.context sq.active (asq @@ stp) in
-          generate { context = cx ; active = goal } prf
+          let (cx, goal, time_flag1) = prove_assertion ~suffices:false sq.context
+          sq.active (asq @@ stp) time_flag in
+          generate { context = cx ; active = goal } prf time_flag1
         in
         let stp = { stp with core = Assert (asq, prf) } in
-        let (cx, goal) = use_assertion ~suffices:false sq.context sq.active (asq @@ stp) in
-        ({ context = cx ; active = goal }, stp :: inits)
+        let (cx, goal) = use_assertion ~suffices:false sq.context
+        sq.active (asq @@ stp) time_flag in
+        ({ context = cx ; active = goal }, stp :: inits, time_flag)
     | Suffices (asq, prf) ->
         let prf =
-          let (cx, goal) = use_assertion ~suffices:true sq.context sq.active (asq @@ stp) in
-          generate { context = cx ; active = goal } prf
+          let (cx, goal) = use_assertion ~suffices:true sq.context
+          sq.active (asq @@ stp) time_flag in
+          generate { context = cx ; active = goal } prf time_flag
         in
         let stp = Suffices (asq, prf) @@ stp in
-        let (cx, goal) = prove_assertion ~suffices:true sq.context sq.active (asq @@ stp) in
-        ({ context = cx ; active = goal }, stp :: inits)
+        let (cx, goal, time_flag1) = prove_assertion ~suffices:true sq.context
+        sq.active (asq @@ stp) time_flag in
+        ({ context = cx ; active = goal }, stp :: inits, time_flag1)
     | Pcase _
     | Have _
     | Take _
@@ -301,30 +341,33 @@ and gen_step (sq, inits) stp =
 (* FIXME this function must split the list of facts into
    its elements and pass them one by one to gen_step *)
 (* also, set the use_location property on each fact *)
-let mutate_one cx uh us =
+let mutate_one cx uh us time_flag =
   let stp = match uh with
     | `Use false -> Use (us.core, false) @@ us
     | `Use true -> assign (Use (us.core, false) @@ us) Props.supp ()
     | `Hide -> Hide us.core @@ us
   in
   let stp = assign stp Props.step (Unnamed (0, 0)) in
-  match gen_step ({context = cx ; active = (At false) @@ us}, []) stp with
-    | (sq, st :: _) ->
+  match gen_step ({context = cx ; active = (At false) @@ us}, [], time_flag) stp with
+    | (sq, st :: _, time_flag) ->
         let obs = Option.default [] (query st Props.obs) in
-        (sq.context, obs)
+        (sq.context, obs, time_flag)
     | _ -> Errors.bug ~at:us "Proof.Gen.mutate"
 
-let rec mutate cx uh us =
+let rec mutate cx uh us time_flag =
   match us.core with
   | {defs = h::t; facts = ff} ->
-      let (cx1, obs1) = mutate_one cx uh ({defs = h::t; facts = []} @@ us) in
-      let (cx2, obs2) = mutate cx1 uh ({defs = []; facts = ff} @@ us) in
+      let (cx1, obs1, time_flag) = mutate_one cx uh ({defs = h::t; facts = []} @@ us)
+      time_flag in
+      let (cx2, obs2) = mutate cx1 uh ({defs = []; facts = ff} @@ us) time_flag in
       (cx2, obs1 @ obs2)
   | {defs = []; facts = h::t} ->
       let f = assign h Props.use_location (Util.get_locus us) in
-      let (cx1, obs1) = mutate_one cx uh ({defs = []; facts = [f]} @@ us) in
+      let (cx1, obs1, time_flag) = mutate_one cx uh ({defs = []; facts = [f]} @@ us)
+      time_flag in
       let ff = List.map (app_expr (shift 1)) t in
-      let (cx2, obs2) = mutate cx1 uh ({defs = []; facts = ff} @@ us) in
+      let (cx2, obs2) = mutate cx1 uh ({defs = []; facts = ff} @@ us)
+      time_flag in
       (cx2, obs1 @ obs2)
   | {defs = []; facts = []} -> (cx, [])
 ;;

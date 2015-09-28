@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32464 $";;
+Revision.f "$Rev: 34602 $";;
 
 open Ext
 open Property
@@ -81,17 +81,16 @@ let process_obs t obs modname thyf fpf =
     if success then proved := IntSet.add (Option.get ob.id) !proved;
   in
   let _ = Errors.get_warnings () in
-  let tasks = Array.map (Prep.make_task fpout thyout record) obs in
-  let control_fd = if !Params.toolbox then Some Unix.stdin else None in
-  let interrupted =
-    Schedule.run !Params.max_threads control_fd (Array.to_list tasks)
+  let tasks =
+    try Array.map (Prep.make_task fpout thyout record) obs
+    with Exit -> [| |]
   in
-  Params.toolbox_killed := interrupted;  (* FIXME remove global var *)
+  Schedule.run !Params.max_threads (Array.to_list tasks);
   Isabelle.thy_close thyf thyout;
   Fpfile.fp_close_and_consolidate fpf fpout;
   Clocks.stop ();
 
-  if not !Params.noproving then begin
+  if not !Params.noproving && not (Toolbox.is_stopped ()) then begin
     if !Params.toolbox then begin
       let untreated = ref [] in
       let f ob =
@@ -134,18 +133,19 @@ let process_obs t obs modname thyf fpf =
 ;;
 
 
-let toolbox_consider ob =
-  let loc = Option.get (Util.query_locus ob.Proof.T.obl) in
-    (!Params.tb_sl-1 < (Loc.line loc.Loc.start))
-  && ((Loc.line loc.Loc.stop) < !Params.tb_el+1)
-
 
 let add_id i ob = {ob with id = Some (i+1)}
 
+
+let toolbox_consider ob =
+  let loc = Option.get (Util.query_locus ob.Proof.T.obl) in
+  !Params.tb_sl <= Loc.line loc.Loc.start
+  && Loc.line loc.Loc.stop <= !Params.tb_el
+
 let toolbox_clean arr =
- if (!Params.toolbox && (not !Params.toolbox_all))
+ if !Params.toolbox
  then List.filter toolbox_consider (Array.to_list arr)
- else (Array.to_list arr)
+ else Array.to_list arr
 
 
 let process_module mcx t =
@@ -221,12 +221,8 @@ let process_module mcx t =
           | _ ->
              Errors.bug ~at:t "normalization didn't produce a finalized module"
         in
-        let obs = Array.mapi add_id fin.final_obs in                                (* add obligation ids*)
-        let obs = toolbox_clean obs in                                              (* only consider specified obligations *)
-          Clocks.stop () ;
-           Clocks.start Clocks.fp_compute;
-          let obs = (if t.core.important then List.map Backend.Fingerprints.write_fingerprint obs else obs) in
-          Clocks.stop () ;
+        let obs = Array.mapi add_id fin.final_obs in  (* add obligation ids *)
+        let obs = toolbox_clean obs in (* only consider specified obligations *)
         let fin = { fin with final_obs = Array.of_list obs ; final_status = (Incomplete, summ) } in
         t.core.stage <- Final fin ;
         Module.Save.store_module ~clock:Clocks.elab t ;
@@ -273,7 +269,7 @@ let process_module mcx t =
       } in
       Array.fill fin.final_obs 0 (Array.length fin.final_obs) dummy_ob;
 
-      if t.core.important && (not !Params.toolbox_killed) then begin
+      if t.core.important && not (Toolbox.is_stopped ()) then begin
         Clocks.start Clocks.check ;
         let modname = t.core.name.core in
         let nmiss = List.length missing in
@@ -300,6 +296,7 @@ let read_new_modules mcx fs =
   end (mcx, []) fs
 
 let main fs =
+  Params.input_files := List.map Filename.basename fs;
   let () =
     List.iter begin
       fun s ->
@@ -318,14 +315,12 @@ let main fs =
     let mcx = Module.Save.complete_load ~clock:Clocks.parsing mcx in
     (* flatten the modules *)
     let (mcx, mods) = Module.Dep.schedule mcx in
-    try
       let f mcx m =
         (* processing the proofs in the commandline modules *)
         let (mcx, m) = process_module mcx m in
         Sm.add m.core.name.core m mcx
       in
       ignore (List.fold_left f mcx mods)
-    with Failure _ -> ()
   end ;
   if !Params.stats then Clocks.report ()
 
@@ -365,6 +360,8 @@ let init () =
        exit 3;
 ;;
 
+exception Stacktrace;;
 
+Sys.set_signal Sys.sigusr1 (Sys.Signal_handle (fun _ -> raise Stacktrace));;
 
-init ()
+init ();;

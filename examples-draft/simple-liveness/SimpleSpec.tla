@@ -18,7 +18,17 @@
 (* the Move and Remove actions imply that any object in Entry eventually   *)
 (* winds up back in Pool.                                                  *)
 (***************************************************************************)
-EXTENDS Integers, FiniteSets, FiniteSetTheorems, WellFoundedInduction, TLAPS
+EXTENDS Integers, FiniteSets, FiniteSetTheoremsLL, WellFoundedInduction, TLAPS
+
+(***************************************************************************)
+(* The following added because FiniteSetTheorems has changed since this    *)
+(* module was written and checked.                                         *)
+(***************************************************************************)
+
+\*EmptySetFinite == TRUE
+\*RemoveElementFromFiniteSet == TRUE
+\*AddElementFiniteSet == TRUE
+
 
 CONSTANT Objects  
   (*************************************************************************)
@@ -119,42 +129,16 @@ THEOREM Invariance == Spec => []Inv
     BY <2>1, <2>2, <2>3, <2>4 DEF Next, Add, Remove
 <1>3. QED
   PROOF
-  (*************************************************************************)
-  (* This proof will be written:                                           *)
-  (*                                                                       *)
-  (*       BY <1>1, <1>2, PTL                                              *)
-  (*                                                                       *)
-  (* See below for a discussion of PTL.  This proof can be encoded using   *)
-  (* the following coagulations                                            *)
-  (*                                                                       *)
-  (*      wfmove <- WF_vars(Move)                                          *)
-  (*      wfremove <- WF_vars(Remove)                                      *)
-  (*      ucvar <- UNCHANGED vars                                          *)
-  (*                                                                       *)
-  (* into the following input for the Logical Workbench (LWB):             *)
-  (*                                                                       *)
-  (*      reset ;                                                          *)
-  (*      load(pltl) ;                                                     *)
-  (*      wfmove := (G F ~ emove) v (G F (move & (~ (ucvar) ))) ;          *)
-  (*      wfremove := (G F ~ eremove) v (G F (removex & (~ (ucvar) ))) ;   *)
-  (*      spec := init & G(next v (ucvar)) & wfmove & wfremove ;           *)
-  (*      a1 := G(init -> inv) ;                                           *)
-  (*      a2 := G(inv & (next v (ucvar)) -> X inv) ;                       *)
-  (*      provable((a1 & a2) -> (spec -> G inv)) ;                         *)
-  (*      provable(spec -> G inv) ;                                        *)
-  (*                                                                       *)
-  (* The LWB proves it.                                                    *)
-  (*************************************************************************)
-  OMITTED
+  BY <1>1, <1>2, PTL DEF Spec
 
 -----------------------------------------------------------------------------
 (***************************************************************************)
 (*                             LIVENESS                                    *)
 (*                                                                         *)
 (* This is how we hope liveness will be proved.  The proofs assume two     *)
-(* "backends" PTL and TLA.                                                 *)
+(* "backends" LS4 and TLA.                                                 *)
 (*                                                                         *)
-(* PTL: This is a translation into a propositional temporal logic prover,  *)
+(* LS4: This is a translation into a propositional temporal logic prover,  *)
 (* such as the pltl theory of the Logical Workbench (LWB).  Coagulation is *)
 (* done so that the only operators that are visible are [], <>, and the    *)
 (* Boolean operators (/\ , => , ~, etc.).  It is assumed that ~> is        *)
@@ -180,7 +164,7 @@ THEOREM Invariance == Spec => []Inv
 (* this way equivalent to the ones that will be produced after the TLA     *)
 (* coagulation.  I may have left some non-constant expressions exposed,    *)
 (* but I doubt if they were of any use to the prover and the proofs will   *)
-(* work when those expressions are suitably coagulated.  For each BY PTL   *)
+(* work when those expressions are suitably coagulated.  For each BY LS4   *)
 (* proof, that file also contains the LWB input into which the obligation  *)
 (* could be translated; and that input has been successfully checked with  *)
 (* the LWB.  Ordinary action obligations from SimpleSpecTrans.tla have     *)
@@ -191,12 +175,11 @@ THEOREM Invariance == Spec => []Inv
 (* Because TLAPS doesn't yet support []ASSUME / []PROVE, these are not     *)
 (* written explicitly.  However, every ASSUME / PROVE with a temporal      *)
 (* assumption or goal is actually a []ASSUME / []PROVE, and this fact was  *)
-(* used in the PTL translations to LWB.                                    *)
+(* used in the LS4 translations to LWB.                                    *)
 (***************************************************************************)
 USE SMT, Zenon, Isa
 
 TLA == TRUE
-PTL == TRUE
 
 -----------------------------------------------------------------------------
 (***************************************************************************)
@@ -218,13 +201,23 @@ THEOREM DiamondExistsCommute ==
 <1>2. QED 
   BY <1>1, TLA (* DEF <> *)
 
+(* I believe the QED step cannot be proved by PTL (TL) *)
+(* SM: In fact, this is not a theorem at all. Trivializing P to TRUE, it 
+   would imply 
+   []<>(\E a \in S : Q(a)) <=> (\E a \in S : []<>Q(a))
+   which is clearly invalid: the LHS asserts that infinitely often there
+   is some a \in S for which Q(a) holds whereas the RHS claims that for
+   some (fixed) a \in S, Q(a) holds infinitely often. This equivalence
+   holds only for finite S and in that case requires a different proof
+   by induction over finite sets.
+*)
 THEOREM LeadsToDisjunctive ==
-         ASSUME NEW S, NEW P, NEW Q(_)
-         PROVE  P ~> ((\E a \in S : Q(a)) <=> (\E a \in S : P ~> Q(a)))
+         ASSUME NEW S, NEW TEMPORAL P, NEW TEMPORAL Q(_)
+         PROVE  (P ~> (\E a \in S : Q(a))) <=> (\E a \in S : P ~> Q(a))
 <1>1. (P => <>(\E a \in S : Q(a))) <=> (P =>  \E a \in S : <>(Q(a)))
-  BY DiamondExistsCommute, TLA 
+  BY DiamondExistsCommute, TLA
 <1>2. QED  
-  BY PTL
+  BY <1>1, PTL
 
 
 LEMMA EALeadsTo == 
@@ -234,7 +227,7 @@ LEMMA EALeadsTo ==
 <1>1. ((\E c \in S : H(c)) => <>(G)) <=> (\A c \in S : H(c) => <>(G))
   BY TLA 
 <1>2. []((\E c \in S : H(c)) => <>(G)) <=> [](\A c \in S : H(c) => <>(G))
-  BY PTL
+  BY <1>1, PTL
 <1>3. [](\A c \in S : H(c) => <>(G)) <=> (\A c \in S : [](H(c) => <>(G))) 
   BY BoxForallCommute, TLA
 <1>4. QED      
@@ -243,6 +236,7 @@ LEMMA EALeadsTo ==
 (***************************************************************************)
 (* Here is the rule that I used to call the Lattice Rule.                  *)
 (***************************************************************************)
+
 THEOREM LeadstoInduction ==
           ASSUME NEW  R, NEW  S, IsWellFoundedOn(R, S),
                  NEW  TEMPORAL G, NEW  TEMPORAL H(_),
@@ -266,8 +260,8 @@ THEOREM LeadstoInduction ==
     BY TLA
   <2>1. H(x) ~>  G \/ (\E d \in SetLessThan(x, R, S) : H(d))
     BY TLA
-  <2>2. [](~G) /\ H(x) ~> (\E d \in SetLessThan(x, R, S) : [](~G) /\ H(d))
-    BY PTL 
+  <2>2. [](~G) /\ H(x) ~> []~G /\ (\E d \in SetLessThan(x, R, S) : H(d))
+    BY <2>1, PTL 
   <2>3. \E d \in SetLessThan(x, R, S) : [](~G) /\ H(x) ~> [](~G) /\ H(d)
     <3> DEFINE L == [](~G) /\ H(x)
                T == SetLessThan(x, R, S)
@@ -316,8 +310,8 @@ THEOREM LeadstoInduction ==
 (* it here.                                                                *)
 (***************************************************************************)
 FiniteSubsets(S) == {T \in SUBSET S : IsFiniteSet(T)}
-FiniteSubsetRel(S) == {<<T1, T2>> \in FiniteSubsets(S) \X FiniteSubsets(S) :
-                         (T1 \subseteq T2) /\ (T1 # T2) }
+FiniteSubsetRel(S) == {x \in FiniteSubsets(S) \X FiniteSubsets(S) :
+                         (x[1] \subseteq x[2]) /\ (x[1] # x[2]) }
 THEOREM FiniteSubsetsWellFounded ==
            \A S : IsWellFoundedOn(FiniteSubsetRel(S), FiniteSubsets(S))
 PROOF OMITTED
@@ -357,7 +351,7 @@ THEOREM Liveness == Spec =>  \A o \in Objects : (o \in entry) ~> (o \in pool)
   <2>2. CASE c = {}
     <3>1. G <=> H(c)
       BY ONLY <2>2, TLA
-    <3>2. QED                                                      
+    <3>2. QED                                                   
       BY ONLY <3>1, PTL
   <2>3. CASE c # {}
     <3>1. H(c) ~> (\E d \in SetLessThan(c, R, S) : H(d)) 
@@ -444,7 +438,7 @@ THEOREM Liveness == Spec =>  \A o \in Objects : (o \in entry) ~> (o \in pool)
   <2>2. [](OX) => (TRUE ~> G)   
     <3> SUFFICES ASSUME [](OX)
                  PROVE  TRUE ~> G
-      BY TLA
+      BY PTL
     <3> DEFINE S == FiniteSubsets(Objects)
                R == FiniteSubsetRel(Objects)
     <3>1. IsWellFoundedOn(R, S)
@@ -470,5 +464,11 @@ THEOREM Liveness == Spec =>  \A o \in Objects : (o \in entry) ~> (o \in pool)
 
 =============================================================================
 \* Modification History
-\* Last modified Thu Jun 20 07:16:03 PDT 2013 by lamport
+\* Last modified Mon Mar 10 14:24:15 CET 2014 by doligez
+\* Last modified Mon Mar 10 12:55:47 CET 2014 by doligez
+\* Last modified Tue Dec 10 09:37:08 PST 2013 by lamport
+\* Last modified Fri Dec 13 10:26:35 CET 2013 by merz
+\* Last modified Tue Dec 10 16:18:41 CET 2013 by shaolin
+\* Last modified Fri Dec 06 06:13:03 PST 2013 by lamport
+\* Last modified Tue Oct 15 14:07:19 CEST 2013 by shaolin
 \* Created Tue Jun 11 00:44:38 PDT 2013 by lamport

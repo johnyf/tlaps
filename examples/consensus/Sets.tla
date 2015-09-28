@@ -78,7 +78,8 @@ THEOREM IntervalCardinality ==
   PROVE  /\ IsFiniteSet(a..b)
          /\ Cardinality(a..b) = IF a > b THEN 0 ELSE b-a+1
 <1>1. CASE a > b
-  BY <1>1, CardinalityZero, SetExtensionality, SMT
+  BY <1>1, CardinalityZero, a..b = {}, IsFiniteSet(a..b),
+     Cardinality(a..b) = 0, SMT
 <1>2. CASE a <= b
   <2> DEFINE n == b - a + 1
   <2> DEFINE F == [x \in 1..n |-> x + a - 1]
@@ -158,7 +159,7 @@ LEMMA CardinalitySetMinus ==
                NEW j \in 1..N-1,
                i # j
         PROVE  f[i] # f[j]
-    BY <2>g, <2>2, SMT DEF IsBijection, f
+    BY <2>g, <2>2, SMTT(30) DEF IsBijection, f
   <2>3. ASSUME NEW y \in S \ {x}
         PROVE  \E i \in 1..N-1 : f[i] = y
     <3>j. PICK j \in 1..N : g[j] = y

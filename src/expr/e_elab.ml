@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32464 $";;
+Revision.f "$Rev: 34291 $";;
 
 open Property
 
@@ -63,7 +63,7 @@ let non_temporal =
     inherit [bool ref] Visit.iter as super
     method hyp (good, _ as scx) h = match h.core with
       | Defn (_, _, Hidden, _)
-      | Fact (_, Hidden) -> scx
+      | Fact (_, Hidden,_) -> scx
       | _ -> super#hyp scx h
     method expr (good, _ as scx) oe = match oe.core with
       | ( Apply ({core = Internal (B.Box _ | B.Diamond | B.Actplus | B.Cdot)}, _)
@@ -95,8 +95,8 @@ let fake_box =
       else  (*begin Errors.set sq.active ("TLAPM does not handle yet temporal logic");failwith "temporal logic" end*)
         let sqcx = Deque.map begin
           fun _ h -> match h.core with
-            | Fact (f, Visible) ->
-                Fact (box f, Visible) @@ f
+            | Fact (f, Visible, tm) ->
+                Fact (box f, Visible, tm) @@ f
             | _ ->
                 h
         end sq.context in
@@ -171,7 +171,6 @@ let normalize cx e =
   let e = let_normalize scx e in
   (* moved to action frontend *)
   (* let e = if nte then unchanged_normalize scx e else e in
-  let e = Constness.propagate#expr scx e in
   let e = prime_normalize cx e in
   let e = fake_box e in
   let e = if nte then e else strong_prime e in *)

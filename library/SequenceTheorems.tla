@@ -1,62 +1,48 @@
--------------------------- MODULE SequenceTheorems --------------------------
+----------------------- MODULE SequenceTheorems -----------------------------
 (***************************************************************************)
-(* This module is a library of theorems about sequences and the            *)
+(* This module contains a library of theorems about sequences and the      *)
 (* corresponding operations.                                               *)
 (***************************************************************************)
-EXTENDS Naturals, Sequences, TLAPS, NaturalsInduction, Functions
+EXTENDS Sequences, Integers, WellFoundedInduction, Functions, TLAPS
 
-
-AXIOM SeqDef == \A S : Seq(S) = UNION {[1..n -> S] : n \in Nat}
 
 (***************************************************************************)
 (* Elementary properties about Seq(S)                                      *)
 (***************************************************************************)
 
+LEMMA SeqDef == \A S : Seq(S) = UNION {[1..n -> S] : n \in Nat}
+
 THEOREM ElementOfSeq ==
    ASSUME NEW S, NEW seq \in Seq(S),
           NEW n \in 1..Len(seq)
    PROVE  seq[n] \in S
-BY SMT
  
 THEOREM EmptySeq ==
    ASSUME NEW S
    PROVE /\ << >> \in Seq(S)
          /\ \A seq \in Seq(S) : (seq = << >>) <=> (Len(seq) = 0)
-BY SMT
 
 THEOREM LenProperties == 
   ASSUME NEW S, NEW seq \in Seq(S)
   PROVE  /\ Len(seq) \in Nat
          /\ seq \in [1..Len(seq) -> S]
          /\ DOMAIN seq = 1 .. Len(seq) 
-BY SMT
 
 THEOREM ExceptSeq ==
   ASSUME NEW S, NEW seq \in Seq(S), NEW i \in 1 .. Len(seq), NEW e \in S
   PROVE  /\ [seq EXCEPT ![i] = e] \in Seq(S)
          /\ Len([seq EXCEPT ![i] = e]) = Len(seq)
          /\ \A j \in 1 .. Len(seq) : [seq EXCEPT ![i] = e][j] = IF j=i THEN e ELSE seq[j]
-\* 2013-06-12: SMT doesn't prove this by itself
-<1>. DEFINE exc == [seq EXCEPT ![i] = e]
-<1>1. Len(exc) = Len(seq)
-  BY SMT
-<1>2. DOMAIN exc = 1 .. Len(seq)
-  BY SMT
-<1>3. \A j \in 1 .. Len(seq) : exc[j] = IF j=i THEN e ELSE seq[j]
-  BY SMT, <1>2
-<1>4. exc \in Seq(S)
-  <2>2. \A j \in DOMAIN exc : exc[j] \in S
-    BY SMT, <1>2, <1>3
-  <2>. QED
-    BY SMT, <1>2, <2>2
-<1>. QED
-  BY <1>1, <1>3, <1>4
 
 THEOREM IsASeq ==
   ASSUME NEW n \in Nat, NEW e(_), NEW S,
          \A i \in 1..n : e(i) \in S
   PROVE  [i \in 1..n |-> e(i)] \in Seq(S)
-PROOF OMITTED  \* SMT should prove this!
+
+THEOREM SeqEqual ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW t \in Seq(S),
+         Len(s) = Len(t), \A i \in 1 .. Len(s) : s[i] = t[i]
+  PROVE  s = t
 
 (***************************************************************************
                  Concatenation (\o) And Properties                      
@@ -68,18 +54,23 @@ THEOREM ConcatProperties ==
          /\ Len(s1 \o s2) = Len(s1) + Len(s2)
          /\ \A i \in 1 .. Len(s1) + Len(s2) : (s1 \o s2)[i] =
                      IF i <= Len(s1) THEN s1[i] ELSE s2[i - Len(s1)]
-BY SMT
 
 THEOREM ConcatEmptySeq ==
   ASSUME NEW S, NEW seq \in Seq(S)
   PROVE  /\ seq \o << >> = seq
          /\ << >> \o seq = seq
-BY SMT
 
 THEOREM ConcatAssociative ==
   ASSUME NEW S, NEW s1 \in Seq(S), NEW s2 \in Seq(S), NEW s3 \in Seq(S)
   PROVE  (s1 \o s2) \o s3 = s1 \o (s2 \o s3)
-BY SMT
+
+THEOREM ConcatSimplifications ==
+  ASSUME NEW S
+  PROVE  /\ \A s,t \in Seq(S) : s \o t = s <=> t = <<>>
+         /\ \A s,t \in Seq(S) : s \o t = t <=> s = <<>>
+         /\ \A s,t \in Seq(S) : s \o t = <<>> <=> s = <<>> /\ t = <<>>
+         /\ \A s,t,u \in Seq(S) : s \o t = s \o u <=> t = u
+         /\ \A s,t,u \in Seq(S) : s \o u = t \o u <=> s = t
 
 (***************************************************************************)
 (*                     SubSeq, Head and Tail                               *)
@@ -93,98 +84,57 @@ THEOREM SubSeqProperties ==
   PROVE  /\ SubSeq(s,m,n) \in Seq(S)
          /\ Len(SubSeq(s, m, n)) = n-m+1
          /\ \A i \in 1 .. n-m+1 : SubSeq(s,m,n)[i] = s[m+i-1]
-<1>0. n = m-1 \/ n \in m .. Len(s)  \* 2013-07-01: SMT now requires this for the QED step -- why?
-  BY SMT
-<1>1. CASE n \in m .. Len(s)
-  BY <1>1, SMT
-<1>2. CASE n = m-1
-  <2>. DEFINE sub == SubSeq(s,m,m-1)
-  <2>1. sub = [i \in 1..0 |-> s[i]]
-    BY SMT
-(* 2013-07-01: The following doesn't work anymore!
-  <2>2. Len(sub) = n-m+1
-    BY <1>2, <2>1, SMT
-*)
-  <2>2a. m \in Nat /\ n \in Nat /\ n-m+1 = 0
-    BY SMT, <1>2
-  <2>2b. Len([i \in 1..0 |-> s[i]]) = 0
-    BY SMT
-  <2>2. Len(sub) = n-m+1
-    BY <2>1, <2>2a, <2>2b
-  <2>3. \A i \in 1..0 : sub[i] \in S
-    BY SMT
-  <2>4. \A i \in 1 .. n-m+1 : SubSeq(s,m,n)[i] = s[m+i-1]
-    BY <1>2, SMT
-  <2>. QED
-    BY Isa, <1>2, <2>1, <2>2, <2>3, <2>4, IsASeq
-<1>. QED
-  BY <1>0, <1>1, <1>2
 
-THEOREM HeadAndTailOfSeq ==
+THEOREM SubSeqEmpty ==
+  ASSUME NEW s, NEW m \in Int, NEW n \in Int, n < m
+  PROVE  SubSeq(s,m,n) = << >>
+
+THEOREM HeadTailProperties ==
    ASSUME NEW S,
           NEW seq \in Seq(S), seq # << >>
    PROVE  /\ Head(seq) \in S
           /\ Tail(seq) \in Seq(S)
           /\ Len(Tail(seq)) = Len(seq)-1
           /\ \A i \in 1 .. Len(Tail(seq)) : Tail(seq)[i] = seq[i+1]
-BY SMT
-  (*************************************************************************)
-  (* Note: the way Tail is defined, Tail(<< >>) \in Seq(S) is actually     *)
-  (* valid (because Tail(<< >>) = << >>).                                  *)
-  (*************************************************************************)
 
 THEOREM TailIsSubSeq ==
   ASSUME NEW S,
          NEW seq \in Seq(S), seq # << >>
   PROVE  Tail(seq) = SubSeq(seq, 2, Len(seq))
-BY SMT
+
+THEOREM SubSeqRestrict ==
+  ASSUME NEW S, NEW seq \in Seq(S), NEW n \in 0 .. Len(seq)
+  PROVE  SubSeq(seq, 1, n) = Restrict(seq, 1 .. n)
+
+THEOREM HeadTailOfSubSeq ==
+  ASSUME NEW S, NEW seq \in Seq(S),
+         NEW m \in 1 .. Len(seq), NEW n \in m .. Len(seq)
+  PROVE  /\ Head(SubSeq(seq,m,n)) = seq[m]
+         /\ Tail(SubSeq(seq,m,n)) = SubSeq(seq, m+1, n)
 
 THEOREM SubSeqRecursiveFirst ==
   ASSUME NEW S, NEW seq \in Seq(S),
          NEW m \in 1 .. Len(seq), NEW n \in m .. Len(seq)
   PROVE  SubSeq(seq, m, n) = << seq[m] >> \o SubSeq(seq, m+1, n)
-BY SMT
 
 THEOREM SubSeqRecursiveSecond ==
   ASSUME NEW S, NEW seq \in Seq(S),
          NEW m \in 1 .. Len(seq), NEW n \in m .. Len(seq)
   PROVE  SubSeq(seq, m, n) = SubSeq(seq, m, n-1) \o << seq[n] >>
-<1>. DEFINE lhs == SubSeq(seq, m, n)
-<1>. DEFINE rhs == SubSeq(seq, m, n-1) \o << seq[n] >>
-<1>1. /\ lhs \in Seq(S)
-      /\ rhs \in Seq(S)
-  BY SMT
-<1>2. Len(lhs) = Len(rhs)
-  BY SMT
-<1>3. ASSUME NEW i \in 1 .. Len(lhs)
-      PROVE  lhs[i] = rhs[i]
-  <2>1. lhs[i] = seq[m+i-1]
-    BY SMT
-  <2>2. rhs[i] = seq[m+i-1]
-    <3>1. CASE i \in 1 .. Len(lhs)-1
-      BY <3>1, SMT
-    <3>2. CASE i = Len(lhs)
-      <4>1. /\ SubSeq(seq, m, n-1) \in Seq(S)
-            /\ << seq[n] >> \in Seq(S)
-        BY SMT
-      <4>2. i \in 1 .. Len(SubSeq(seq, m, n-1)) + Len(<<seq[n]>>)
-        BY SMT
-      <4>3. ~(i <= Len(SubSeq(seq, m, n-1)))
-        BY <3>2, SMT
-      <4>4. rhs[i] = <<seq[n]>>[i - Len(SubSeq(seq, m, n-1))]
-        BY <4>1, <4>2, <4>3, ConcatProperties
-      <4>5. i - Len(SubSeq(seq, m, n-1)) = 1
-        BY <3>2, SMT
-      <4>6. rhs[i] = seq[n]
-        BY <4>4, <4>5
-      <4>. QED
-        BY <3>2, <4>6, SMT
-    <3>3. QED
-      BY <3>1, <3>2, SMT
-  <2>. QED
-    BY <2>1, <2>2
-<1>. QED
-  BY <1>1, <1>2, <1>3, SMT
+
+THEOREM SubSeqFull ==
+  ASSUME NEW S, NEW seq \in Seq(S)
+  PROVE  SubSeq(seq, 1, Len(seq)) = seq
+
+(*****************************************************************************)
+(* Adjacent subsequences can be concatenated to obtain a longer subsequence. *)
+(*****************************************************************************)
+THEOREM ConcatAdjacentSubSeq ==
+  ASSUME NEW S, NEW seq \in Seq(S), 
+         NEW m \in 1 .. Len(seq)+1, 
+         NEW k \in m-1 .. Len(seq), 
+         NEW n \in k .. Len(seq)
+  PROVE  SubSeq(seq, m, k) \o SubSeq(seq, k+1, n) = SubSeq(seq, m, n)
 
 (***************************************************************************)
 (*                 Append, InsertAt, Cons & RemoveAt                       *)
@@ -199,34 +149,46 @@ THEOREM SubSeqRecursiveSecond ==
 THEOREM AppendProperties ==
   ASSUME NEW S, NEW seq \in Seq(S), NEW elt \in S
   PROVE  /\ Append(seq, elt) \in Seq(S)
+         /\ Append(seq, elt) # << >>
          /\ Len(Append(seq, elt)) = Len(seq)+1
          /\ \A i \in 1.. Len(seq) : Append(seq, elt)[i] = seq[i]
          /\ Append(seq, elt)[Len(seq)+1] = elt
-BY SMT
 
 THEOREM AppendIsConcat ==
   ASSUME NEW S, NEW seq \in Seq(S), NEW elt \in S
   PROVE  Append(seq, elt) = seq \o <<elt>>
-BY SMT
+
+THEOREM HeadTailAppend ==
+  ASSUME NEW S, NEW seq \in Seq(S), NEW elt
+  PROVE  /\ Head(Append(seq, elt)) = IF seq = <<>> THEN elt ELSE Head(seq)
+         /\ Tail(Append(seq, elt)) = IF seq = <<>> THEN <<>> ELSE Append(Tail(seq), elt)
 
 Cons(elt, seq) == <<elt>> \o seq
 
 THEOREM ConsProperties ==
-          ASSUME NEW S, NEW seq \in Seq(S), NEW elt \in S
-          PROVE /\ Cons(elt, seq) \in Seq(S)
-                /\ Len(Cons(elt, seq)) = Len(seq)+1
-                /\ Cons(elt, seq)[1] = elt
-                /\ \A i \in 1 .. Len(seq) : Cons(elt, seq)[i+1] = seq[i]
-BY SMT DEF Cons
+  ASSUME NEW S, NEW seq \in Seq(S), NEW elt \in S
+  PROVE /\ Cons(elt, seq) \in Seq(S)
+        /\ Cons(elt, seq) # <<>> 
+        /\ Len(Cons(elt, seq)) = Len(seq)+1
+        /\ Head(Cons(elt, seq)) = elt
+        /\ Tail(Cons(elt, seq)) = seq
+        /\ Cons(elt, seq)[1] = elt
+        /\ \A i \in 1 .. Len(seq) : Cons(elt, seq)[i+1] = seq[i]
 
 THEOREM ConsEmpty ==
   \A x : Cons(x, << >>) = << x >>
-BY SMT DEF Cons
 
 THEOREM ConsHeadTail ==
   ASSUME NEW S, NEW seq \in Seq(S), seq # << >>
   PROVE  Cons(Head(seq), Tail(seq)) = seq
-BY SMT DEF Cons
+
+THEOREM ConsAppend ==
+  ASSUME NEW S, NEW seq \in Seq(S), NEW x \in S, NEW y \in S
+  PROVE  Cons(x, Append(seq, y)) = Append(Cons(x,seq), y)
+
+THEOREM ConsInjective ==
+  ASSUME NEW S, NEW e \in S, NEW s \in Seq(S), NEW f \in S, NEW t \in Seq(S)
+  PROVE  Cons(e,s) = Cons(f,t) <=> e = f /\ s = t
 
 InsertAt(seq,i,elt) == SubSeq(seq, 1, i-1) \o <<elt>> \o SubSeq(seq, i, Len(seq))
 
@@ -238,34 +200,6 @@ THEOREM InsertAtProperties ==
                      IF j<i THEN seq[j]
                      ELSE IF j=i THEN elt
                      ELSE seq[j-1]
-(* The following worked on 2013-06-11 but not on 2013-06-12
-   BY SMT, SubSeqProperties DEF InsertAt
-*)
-<1>1. InsertAt(seq,i,elt) \in Seq(S)
-  BY SMT, SubSeqProperties DEF InsertAt
-<1>2. Len(InsertAt(seq,i,elt)) = Len(seq)+1
-  BY SMT DEF InsertAt
-<1>3. ASSUME NEW j \in 1 .. Len(seq)+1
-      PROVE  InsertAt(seq,i,elt)[j] = IF j<i THEN seq[j]
-                                      ELSE IF j=i THEN elt
-                                      ELSE seq[j-1]
-  <2>1. CASE j \in 1 .. i-1
-    BY <2>1, SMT DEF InsertAt
-  <2>2. CASE j = i  \** I don't understand why this case makes problems but not the others
-    <3>1. j - Len(SubSeq(seq, 1, i-1)) = 1
-      BY <2>2, SMT
-    <3>2. <<elt>>[j - Len(SubSeq(seq, 1, i-1))] = elt
-      BY <3>1  \** SMT doesn't work here
-    <3>3. (SubSeq(seq, 1, i-1) \o <<elt>>)[j] = elt
-      BY <2>2, <3>2, SMT
-    <3>. QED
-      BY <2>2, <3>3, SMT DEF InsertAt
-  <2>3. CASE j \in i+1 .. Len(seq)+1
-    BY <2>3, SMT DEF InsertAt
-  <2>. QED
-    BY <2>1, <2>2, <2>3, SMT
-<1>. QED
-  BY <1>1, <1>2, <1>3
 
 RemoveAt(seq, i) == SubSeq(seq, 1, i-1) \o SubSeq(seq, i+1, Len(seq))
 
@@ -275,33 +209,6 @@ THEOREM RemoveAtProperties ==
    PROVE  /\ RemoveAt(seq,i) \in Seq(S)
           /\ Len(RemoveAt(seq,i)) = Len(seq) - 1
           /\ \A j \in 1 .. Len(seq)-1 : RemoveAt(seq,i)[j] = IF j<i THEN seq[j] ELSE seq[j+1]
-(* The following worked on 2013-06-11 but not on 2013-06-12
-   BY SMT, SubSeqProperties DEF RemoveAt
-*)
-<1>1. RemoveAt(seq,i) \in Seq(S)
-  BY SMT DEF RemoveAt
-<1>2. Len(RemoveAt(seq,i)) = Len(seq) - 1
-  BY SMT DEF RemoveAt
-<1>3. ASSUME NEW j \in 1 .. Len(seq)-1
-      PROVE  RemoveAt(seq,i)[j] = IF j<i THEN seq[j] ELSE seq[j+1]
-  <2>1. CASE j \in 1 .. i-1
-    BY <2>1, SMT DEF RemoveAt
-  <2>2. CASE j \in i .. Len(seq)-1
-    <3>0. /\ SubSeq(seq, 1, i-1) \in Seq(S)
-          /\ SubSeq(seq, i+1, Len(seq)) \in Seq(S)
-      BY SubSeqProperties, SMT
-    <3>1. j \in 1 .. Len(SubSeq(seq, 1, i-1)) + Len(SubSeq(seq, i+1, Len(seq)))
-      BY SMT
-    <3>2. ~(j <= Len(SubSeq(seq, 1, i-1)))
-      BY <2>2, SMT
-    <3>3. RemoveAt(seq,i)[j] = SubSeq(seq, i+1, Len(seq))[j - Len(SubSeq(seq, 1, i-1))]
-      BY <3>0, <3>1, <3>2, ConcatProperties DEF RemoveAt
-    <3>. QED
-      BY <2>2, <3>3, SMT
-  <2>. QED
-    BY SMT, <2>1, <2>2
-<1>. QED
-  BY <1>1, <1>2, <1>3
 
 (***************************************************************************)
 (*            Front & Last                                                 *)
@@ -315,22 +222,41 @@ THEOREM RemoveAtProperties ==
 Front(seq) == SubSeq(seq, 1, Len(seq)-1)
 Last(seq) == seq[Len(seq)]
 
-THEOREM FrontLastProperties ==
-  ASSUME NEW S, NEW seq \in Seq(S), seq # << >>
+THEOREM FrontProperties ==
+  ASSUME NEW S, NEW seq \in Seq(S)
   PROVE  /\ Front(seq) \in Seq(S)
-         /\ Last(seq) \in S 
+         /\ Len(Front(seq)) = IF seq = << >> THEN 0 ELSE Len(seq)-1                    
+         /\ \A i \in 1 .. Len(seq)-1 : Front(seq)[i] = seq[i]
+
+THEOREM FrontOfEmpty == Front(<< >>) = << >>
+
+THEOREM LastProperties ==
+  ASSUME NEW S, NEW seq \in Seq(S), seq # << >>
+  PROVE  /\ Last(seq) \in S 
          /\ Append(Front(seq), Last(seq)) = seq 
-         /\ Len(Front(seq)) = Len(seq)-1                    
-BY SMT, SubSeqProperties DEF Front, Last
+
+THEOREM FrontLastOfSubSeq ==
+  ASSUME NEW S, NEW seq \in Seq(S),
+         NEW m \in 1 .. Len(seq), NEW n \in m .. Len(seq)
+  PROVE  /\ Front(SubSeq(seq,m,n)) = SubSeq(seq, m, n-1)
+         /\ Last(SubSeq(seq,m,n)) = seq[n]
+
+THEOREM FrontLastAppend ==
+  ASSUME NEW S, NEW seq \in Seq(S), NEW e \in S
+  PROVE  /\ Front(Append(seq, e)) = seq
+         /\ Last(Append(seq, e)) = e
+
+THEOREM AppendInjective ==
+  ASSUME NEW S, NEW e \in S, NEW s \in Seq(S), NEW f \in S, NEW t \in Seq(S)
+  PROVE  Append(s,e) = Append(t,f) <=> s = t /\ e = f
 
 (***************************************************************************)
-(* As a corollary of the previous theorem it follows that a sequence is    *)
+(* As a corollary of the previous theorems it follows that a sequence is   *)
 (* either empty or can be obtained by appending an element to a sequence.  *)
 (***************************************************************************)
 THEOREM SequenceEmptyOrAppend == 
   ASSUME NEW S, NEW seq \in Seq(S), seq # << >>
   PROVE \E s \in Seq(S), elt \in S : seq = Append(s, elt)
-BY FrontLastProperties
      
 (***************************************************************************)
 (*                   REVERSE SEQUENCE And Properties                       *)
@@ -344,74 +270,48 @@ THEOREM ReverseProperties ==
   PROVE  /\ Reverse(seq) \in Seq(S)
          /\ Len(Reverse(seq)) = Len(seq)
          /\ Reverse(Reverse(seq)) = seq
-<1>1. Reverse(seq) \in Seq(S)
-  <2>1. \A j \in 1..Len(seq) : seq[Len(seq)-j+1] \in S
-    BY SMT
-  <2>2. Reverse(seq) \in [1..Len(seq) -> S]
-    BY <2>1, SMT DEF Reverse 
-  <2>3. QED
-    BY <2>1, <2>2, SMT
-<1>2. /\ Len(Reverse(seq)) = Len(seq)
-      /\ Reverse(Reverse(seq)) = seq
-  BY SMT DEF Reverse
-<1>3. QED
-  BY <1>1, <1>2
 
 THEOREM ReverseEmpty == Reverse(<< >>) = << >>
-BY SMT DEF Reverse
+
+THEOREM ReverseEqual ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW t \in Seq(S), Reverse(s) = Reverse(t)
+  PROVE  s = t
+
+THEOREM ReverseEmptyIffEmpty ==
+  ASSUME NEW S, NEW seq \in Seq(S), Reverse(seq) = <<>>
+  PROVE  seq = <<>>
 
 THEOREM ReverseConcat == 
   ASSUME NEW S, NEW s1 \in Seq(S), NEW s2 \in Seq(S)
   PROVE  Reverse(s1 \o s2) = Reverse(s2) \o Reverse(s1)
-BY SMT DEF Reverse
 
 THEOREM ReverseAppend ==
   ASSUME NEW S, NEW seq \in Seq(S), NEW e \in S
   PROVE  Reverse(Append(seq,e)) = Cons(e, Reverse(seq))
-BY SMT DEF Reverse, Cons
 
 THEOREM ReverseCons ==
   ASSUME NEW S, NEW seq \in Seq(S), NEW e \in S
   PROVE  Reverse(Cons(e,seq)) = Append(Reverse(seq), e)
-BY SMT, ConsProperties DEF Reverse
-     
+
 THEOREM ReverseSingleton == \A x : Reverse(<< x >>) = << x >>
-\* 2013-06-10: "BY SMT DEF Reverse" doesn't prove this
-<1> TAKE x
-<1>. /\ << >> \in Seq({x})
-     /\ << x >> \in Seq({x})
-  OBVIOUS
-<1>1. << x >> = Cons(x, << >>)
-  BY ConsEmpty
-<1>2. Reverse(Cons(x, << >>)) = Append(Reverse(<< >>), x)
-  BY ReverseCons
-<1>3. QED
-  BY <1>1, <1>2, ReverseEmpty
 
 THEOREM ReverseSubSeq ==
   ASSUME NEW S, NEW seq \in Seq(S),
          NEW m \in 1..Len(seq), NEW n \in 1..Len(seq)
   PROVE  Reverse(SubSeq(seq, m , n)) = SubSeq(Reverse(seq), Len(seq)-n+1, Len(seq)-m+1)
-(* This proof worked on 2013-06-11, but not on 2013-06-12:
-   BY SMT, SubSeqProperties DEF Reverse
-*)
-
 
 THEOREM ReversePalindrome ==
   ASSUME NEW S, NEW seq \in Seq(S),
          Reverse(seq) = seq
   PROVE  Reverse(seq \o seq) = seq \o seq
-BY ReverseConcat
 
-THEOREM LastEqualsHeadOfReverse ==
+THEOREM LastEqualsHeadReverse ==
   ASSUME NEW S, NEW seq \in Seq(S), seq # << >>
   PROVE  Last(seq) = Head(Reverse(seq))
-BY SMT DEF Last, Reverse
 
-THEOREM FrontEqualsReverseOfTail ==
+THEOREM ReverseFrontEqualsTailReverse ==
   ASSUME NEW S, NEW seq \in Seq(S), seq # << >>
-  PROVE  Front(seq) = Reverse(Tail(Reverse(seq)))
-BY SMT DEF Front, Reverse
+  PROVE  Reverse(Front(seq)) = Tail(Reverse(seq))
 
 (***************************************************************************)
 (* Induction principles for sequences                                      *)
@@ -422,141 +322,315 @@ THEOREM SequencesInductionAppend ==
          P(<< >>),
          \A s \in Seq(S), e \in S : P(s) => P(Append(s,e))
   PROVE  \A seq \in Seq(S) : P(seq)
-<1>. DEFINE Q(n) == \A seq \in Seq(S) : Len(seq) = n => P(seq)
-<1>1. SUFFICES \A k \in Nat : Q(k)
-  OBVIOUS
-<1>2. Q(0)
-  OBVIOUS
-<1>3. ASSUME NEW n \in Nat, Q(n)
-      PROVE  Q(n+1)
-  <2>1. ASSUME NEW s \in Seq(S), Len(s) = n+1
-        PROVE P(s)
-    <3>1. /\ Front(s) \in Seq(S)
-          /\ Last(s) \in S
-          /\ Len(Front(s)) = n
-          /\ Append(Front(s), Last(s)) = s
-      BY SMT, <2>1, FrontLastProperties 
-    <3>2. P(Front(s))
-      BY <1>3, <3>1
-    <3>3. QED
-      BY <3>1, <3>2                  
-  <2>. QED
-    BY <2>1          
-<1>4. QED
-  BY <1>2, <1>3, NatInduction
       
 THEOREM SequencesInductionCons == 
-        ASSUME NEW P(_), NEW S,
-               P(<< >>),
-               \A s \in Seq(S), e \in S : P(s) => P(Cons(e,s))
-        PROVE \A seq \in Seq(S) : P(seq)
-<1>. DEFINE Q(n) == \A seq \in Seq(S) : Len(seq) = n => P(seq)
-<1>1. SUFFICES \A k \in Nat : Q(k)
-  OBVIOUS
-<1>2. Q(0)
-  OBVIOUS
-<1>3. ASSUME NEW n \in Nat, Q(n)
-      PROVE  Q(n+1)
-  <2>1. ASSUME NEW s \in Seq(S), Len(s) = n+1
-        PROVE P(s)
-    <3>1. /\ Tail(s) \in Seq(S)
-          /\ Head(s) \in S
-          /\ Len(Tail(s)) = n
-          /\ Cons(Head(s), Tail(s)) = s
-      BY SMT, <2>1, ConsHeadTail 
-    <3>2. P(Tail(s))
-      BY <1>3, <3>1
-    <3>3. QED
-      BY <3>1, <3>2                  
-  <2>. QED
-    BY <2>1          
-<1>4. QED
-  BY <1>2, <1>3, NatInduction
+  ASSUME NEW P(_), NEW S,
+         P(<< >>),
+         \A s \in Seq(S), e \in S : P(s) => P(Cons(e,s))
+  PROVE \A seq \in Seq(S) : P(seq)
 
 (***************************************************************************)
 (*                          RANGE OF SEQUENCE                              *)
 (***************************************************************************)
 
-(* The following definition makes sense for any functions, in particular for sequences. *)
-\*Range(f) == { f[i] : i \in DOMAIN f }
-
-RangeSequence(seq) == { seq[i] : i \in 1..Len(seq) }
-RangeSequence1(seq, S) == { x \in S : \E i \in 1..Len(seq) : x=seq[i] } 
-
-
 THEOREM RangeOfSeq == 
   ASSUME NEW S, NEW seq \in Seq(S)
   PROVE  Range(seq) \in SUBSET S
-BY SMT DEF Range
 
-\* Both the definitions of range, ie. Range and RangeSequence1 are equivalent.
 THEOREM RangeEquality == 
   ASSUME NEW S, NEW seq \in Seq(S)
   PROVE Range(seq) = { seq[i] : i \in 1 .. Len(seq) }
-<1>1. DOMAIN seq = 1 .. Len(seq)
-  BY SMT
-<1>2. QED
-  BY <1>1 DEF Range
 
-(* The range of the mirror sequence equals that of the original one. *)
+(* The range of the reverse sequence equals that of the original one. *)
 THEOREM RangeReverse == 
   ASSUME NEW S, NEW seq \in Seq(S)
   PROVE Range(Reverse(seq)) = Range(seq)
-<1>1. Range(Reverse(seq)) \subseteq Range(seq)
-  <2>1. SUFFICES ASSUME NEW i \in 1 .. Len(seq)
-                 PROVE  Reverse(seq)[i] \in Range(seq)
-    BY SMT, ReverseProperties, RangeEquality
-  <2>2. Len(seq)-i+1 \in 1 .. Len(seq)
-    BY SMT, <2>1
-  <2>. QED
-    BY <2>2, RangeEquality DEF Reverse
-<1>2. Range(seq) \subseteq Range(Reverse(seq))
-  <2>1. SUFFICES ASSUME NEW i \in 1 .. Len(seq)
-                 PROVE  seq[i] \in Range(Reverse(seq))
-    BY Isa, RangeEquality
-  <2>2. Len(seq)-i+1 \in 1 .. Len(seq)
-    BY SMT, <2>1
-(* 2013-07-01: SMT no longer solves the following
-  <2>. QED
-    BY SMT, <2>2, RangeEquality, ReverseProperties DEF Reverse
-*)
-  <2>3. seq[i] = Reverse(seq)[Len(seq)-i+1]
-    BY SMT DEF Reverse
-  <2>. QED
-    BY <2>2, <2>3, RangeEquality, ReverseProperties
-<1>3. QED
-  BY <1>1, <1>2
 
-(* Range of concatenation of sequences is union of range of sequences *)
+(* Range of concatenation of sequences is the union of the ranges *)
 THEOREM RangeConcatenation == 
   ASSUME NEW S, NEW s1 \in Seq(S), NEW s2 \in Seq(S)
   PROVE  Range(s1 \o s2) = Range(s1) \cup Range(s2)
-<1>1. Range(s1) \subseteq Range(s1 \o s2)
-  <2>1. SUFFICES ASSUME NEW i \in 1 .. Len(s1)
-                 PROVE  s1[i] \in Range(s1 \o s2)
-    BY RangeEquality, Isa
-  <2>. QED
-    BY SMT, RangeEquality
-<1>2. Range(s2) \subseteq Range(s1 \o s2)
-  <2>1. SUFFICES ASSUME NEW i \in 1 .. Len(s2)
-                 PROVE  s2[i] \in Range(s1 \o s2)
-    BY RangeEquality, Isa
-  <2>2. /\ Len(s1)+i \in 1 .. Len(s1 \o s2)
-        /\ (s1 \o s2)[Len(s1)+i] = s2[i]
-    BY SMT
-  <2>. QED
-    BY SMT, <2>2, RangeEquality
-<1>3. Range(s1 \o s2) \subseteq Range(s1) \cup Range(s2)
-  <2>1. SUFFICES ASSUME NEW i \in 1 .. Len(s1 \o s2)
-                 PROVE  (s1 \o s2)[i] \in Range(s1) \cup Range(s2)
-    BY LenProperties, ConcatProperties DEF Range
-  <2>2. CASE i \in 1 .. Len(s1)
-    BY SMT, RangeEquality
-  <2>3. CASE i \in Len(s1)+1 .. Len(s1 \o s2)
-    BY SMT, RangeEquality
-  <2>. QED
-    BY <2>2, <2>3, SMT
-<1>. QED
-  BY <1>1, <1>2, <1>3
+
+(***************************************************************************)
+(* Prefixes and suffixes of sequences.                                     *)
+(***************************************************************************)
+
+IsPrefix(s,t) == \E u \in Seq(Range(t)) : t = s \o u
+IsStrictPrefix(s,t) == IsPrefix(s,t) /\ s # t
+
+IsSuffix(s,t) == \E u \in Seq(Range(t)) : t = u \o s
+IsStrictSuffix(s,t) == IsSuffix(s,t) /\ s # t
+
+(***************************************************************************)
+(* The following theorem gives three alternative characterizations of      *)
+(* prefixes. It also implies that any prefix of a sequence t is at most    *)
+(* as long as t.                                                           *)
+(***************************************************************************)
+THEOREM IsPrefixProperties ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW t \in Seq(S)
+  PROVE  /\ IsPrefix(s,t) <=> \E u \in Seq(S) : t = s \o u
+         /\ IsPrefix(s,t) <=> Len(s) <= Len(t) /\ s = SubSeq(t, 1, Len(s))
+         /\ IsPrefix(s,t) <=> Len(s) <= Len(t) /\ s = Restrict(t, DOMAIN s)
+
+THEOREM IsStrictPrefixProperties ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW t \in Seq(S)
+  PROVE  /\ IsStrictPrefix(s,t) <=> \E u \in Seq(S) : u # << >> /\ t = s \o u
+         /\ IsStrictPrefix(s,t) <=> Len(s) < Len(t) /\ s = SubSeq(t, 1, Len(s))
+         /\ IsStrictPrefix(s,t) <=> Len(s) < Len(t) /\ s = Restrict(t, DOMAIN s)
+         /\ IsStrictPrefix(s,t) <=> IsPrefix(s,t) /\ Len(s) < Len(t)
+
+THEOREM IsPrefixElts ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW t \in Seq(S), NEW i \in 1 .. Len(s),
+         IsPrefix(s,t)
+  PROVE  s[i] = t[i]
+
+THEOREM EmptyIsPrefix ==
+  ASSUME NEW S, NEW s \in Seq(S)
+  PROVE  /\ IsPrefix(<<>>, s)
+         /\ IsPrefix(s, <<>>) <=> s = <<>>
+         /\ IsStrictPrefix(<<>>, s) <=> s # <<>>
+         /\ ~ IsStrictPrefix(s, <<>>)
+
+THEOREM IsPrefixConcat ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW t \in Seq(S)
+  PROVE  IsPrefix(s, s \o t)
+
+THEOREM IsPrefixAppend ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW e \in S
+  PROVE  IsPrefix(s, Append(s,e))
+
+THEOREM FrontIsPrefix ==
+  ASSUME NEW S, NEW s \in Seq(S)
+  PROVE  /\ IsPrefix(Front(s), s)
+         /\ s # <<>> => IsStrictPrefix(Front(s), s)
+
+(***************************************************************************)
+(* (Strict) prefixes on sequences form a (strict) partial order, and       *)
+(* the strict ordering is well-founded.                                    *)
+(***************************************************************************)
+THEOREM IsPrefixPartialOrder ==
+  ASSUME NEW S
+  PROVE  /\ \A s \in Seq(S) : IsPrefix(s,s)
+         /\ \A s,t \in Seq(S) : IsPrefix(s,t) /\ IsPrefix(t,s) => s = t
+         /\ \A s,t,u \in Seq(S) : IsPrefix(s,t) /\ IsPrefix(t,u) => IsPrefix(s,u)
+
+THEOREM ConcatIsPrefix ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW t \in Seq(S), NEW u \in Seq(S),
+         IsPrefix(s \o t, u)
+  PROVE  IsPrefix(s, u)
+
+THEOREM ConcatIsPrefixCancel ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW t \in Seq(S), NEW u \in Seq(S)
+  PROVE  IsPrefix(s \o t, s \o u) <=> IsPrefix(t, u)
+
+THEOREM ConsIsPrefixCancel ==
+  ASSUME NEW S, NEW e \in S, NEW s \in Seq(S), NEW t \in Seq(S)
+  PROVE  IsPrefix(Cons(e,s), Cons(e,t)) <=> IsPrefix(s,t)
+
+THEOREM ConsIsPrefix ==
+  ASSUME NEW S, NEW e \in S, NEW s \in Seq(S), NEW u \in Seq(S),
+         IsPrefix(Cons(e,s), u)
+  PROVE  /\ e = Head(u)
+         /\ IsPrefix(s, Tail(u))
+
+THEOREM IsStrictPrefixStrictPartialOrder ==
+  ASSUME NEW S
+  PROVE  /\ \A s \in Seq(S) : ~ IsStrictPrefix(s,s)
+         /\ \A s,t \in Seq(S) : IsStrictPrefix(s,t) => ~ IsStrictPrefix(t,s)
+         /\ \A s,t,u \in Seq(S) : IsStrictPrefix(s,t) /\ IsStrictPrefix(t,u) => IsStrictPrefix(s,u)
+
+THEOREM IsStrictPrefixWellFounded ==
+  ASSUME NEW S
+  PROVE  IsWellFoundedOn(OpToRel(IsStrictPrefix, Seq(S)), Seq(S))
+
+THEOREM SeqStrictPrefixInduction ==
+  ASSUME NEW P(_), NEW S,
+         \A t \in Seq(S) : (\A s \in Seq(S) : IsStrictPrefix(s,t) => P(s)) => P(t)
+  PROVE  \A s \in Seq(S) : P(s)
+
+(***************************************************************************)
+(* Similar theorems about suffixes.                                        *)
+(***************************************************************************)
+
+THEOREM IsSuffixProperties ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW t \in Seq(S)
+  PROVE  /\ IsSuffix(s,t) <=> \E u \in Seq(S) : t = u \o s
+         /\ IsSuffix(s,t) <=> Len(s) <= Len(t) /\ s = SubSeq(t, Len(t)-Len(s)+1, Len(t))
+         /\ IsSuffix(s,t) <=> IsPrefix(Reverse(s), Reverse(t))
+
+THEOREM IsStrictSuffixProperties ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW t \in Seq(S)
+  PROVE  /\ IsStrictSuffix(s,t) <=> \E u \in Seq(S) : u # << >> /\ t = u \o s
+         /\ IsStrictSuffix(s,t) <=> Len(s) < Len(t) /\ IsSuffix(s,t)
+         /\ IsStrictSuffix(s,t) <=> Len(s) < Len(t) /\ s = SubSeq(t, Len(t)-Len(s)+1, Len(t))
+         /\ IsStrictSuffix(s,t) <=> IsStrictPrefix(Reverse(s), Reverse(t))
+
+THEOREM IsSuffixElts ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW t \in Seq(S), NEW i \in 1 .. Len(s),
+         IsSuffix(s,t)
+  PROVE  s[i] = t[Len(t) - Len(s) + i]
+
+THEOREM EmptyIsSuffix ==
+  ASSUME NEW S, NEW s \in Seq(S)
+  PROVE  /\ IsSuffix(<<>>, s)
+         /\ IsSuffix(s, <<>>) <=> s = <<>>
+         /\ IsStrictSuffix(<<>>, s) <=> s # <<>>
+         /\ ~ IsStrictSuffix(s, <<>>)
+
+THEOREM IsSuffixConcat ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW t \in Seq(S)
+  PROVE  IsSuffix(s, t \o s)
+
+THEOREM IsStrictSuffixCons ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW e \in S
+  PROVE  IsStrictSuffix(s, Cons(e,s))
+
+THEOREM TailIsSuffix ==
+  ASSUME NEW S, NEW s \in Seq(S)
+  PROVE  /\ IsSuffix(Tail(s), s)
+         /\ s # <<>> => IsStrictSuffix(Tail(s), s)
+
+THEOREM IsSuffixPartialOrder ==
+  ASSUME NEW S
+  PROVE  /\ \A s \in Seq(S) : IsSuffix(s,s)
+         /\ \A s,t \in Seq(S) : IsSuffix(s,t) /\ IsSuffix(t,s) => s = t
+         /\ \A s,t,u \in Seq(S) : IsSuffix(s,t) /\ IsSuffix(t,u) => IsSuffix(s,u)
+
+THEOREM ConcatIsSuffix ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW t \in Seq(S), NEW u \in Seq(S),
+         IsSuffix(s \o t, u)
+  PROVE  IsSuffix(t, u)
+
+THEOREM ConcatIsSuffixCancel ==
+  ASSUME NEW S, NEW s \in Seq(S), NEW t \in Seq(S), NEW u \in Seq(S)
+  PROVE  IsSuffix(s \o t, u \o t) <=> IsSuffix(s, u)
+
+THEOREM AppendIsSuffixCancel ==
+  ASSUME NEW S, NEW e \in S, NEW s \in Seq(S), NEW t \in Seq(S)
+  PROVE  IsSuffix(Append(s,e), Append(t,e)) <=> IsSuffix(s,t)
+
+THEOREM AppendIsSuffix ==
+  ASSUME NEW S, NEW e \in S, NEW s \in Seq(S), NEW u \in Seq(S),
+         IsSuffix(Append(s,e), u)
+  PROVE  /\ e = Last(u)
+         /\ IsSuffix(s, Front(u))
+
+THEOREM IsStrictSuffixStrictPartialOrder ==
+  ASSUME NEW S
+  PROVE  /\ \A s \in Seq(S) : ~ IsStrictSuffix(s,s)
+         /\ \A s,t \in Seq(S) : IsStrictSuffix(s,t) => ~ IsStrictSuffix(t,s)
+         /\ \A s,t,u \in Seq(S) : IsStrictSuffix(s,t) /\ IsStrictSuffix(t,u) => IsStrictSuffix(s,u)
+
+THEOREM IsStrictSuffixWellFounded ==
+  ASSUME NEW S
+  PROVE  IsWellFoundedOn(OpToRel(IsStrictSuffix, Seq(S)), Seq(S))
+
+THEOREM SeqStrictSuffixInduction ==
+  ASSUME NEW P(_), NEW S,
+         \A t \in Seq(S) : (\A s \in Seq(S) : IsStrictSuffix(s,t) => P(s)) => P(t)
+  PROVE  \A s \in Seq(S) : P(s)
+
+(***************************************************************************)
+(* Since the (strict) prefix and suffix orderings on sequences are         *)
+(* well-founded, they can be used for defining recursive functions.        *)
+(* The operators OpDefinesFcn, WFInductiveDefines, and WFInductiveUnique   *)
+(* are defined in module WellFoundedInduction.                             *)
+(***************************************************************************)
+
+StrictPrefixesDetermineDef(S, Def(_,_)) ==
+   \A g,h : \A seq \in Seq(S) :
+      (\A pre \in Seq(S) : IsStrictPrefix(pre,seq) => g[pre] = h[pre])
+      => Def(g, seq) = Def(h, seq)
+
+LEMMA StrictPrefixesDetermineDef_WFDefOn ==
+  ASSUME NEW S, NEW Def(_,_), StrictPrefixesDetermineDef(S, Def)
+  PROVE  WFDefOn(OpToRel(IsStrictPrefix, Seq(S)), Seq(S), Def)
+
+THEOREM PrefixRecursiveSequenceFunctionUnique ==
+  ASSUME NEW S, NEW Def(_,_), StrictPrefixesDetermineDef(S, Def)
+  PROVE  WFInductiveUnique(Seq(S), Def)
+
+THEOREM PrefixRecursiveSequenceFunctionDef ==
+  ASSUME NEW S, NEW Def(_,_), NEW f,
+         StrictPrefixesDetermineDef(S, Def),
+         OpDefinesFcn(f, Seq(S), Def)
+  PROVE  WFInductiveDefines(f, Seq(S), Def)
+
+THEOREM PrefixRecursiveSequenceFunctionType ==
+  ASSUME NEW S, NEW T, NEW Def(_,_), NEW f,
+         T # {},
+         StrictPrefixesDetermineDef(S, Def),
+         WFInductiveDefines(f, Seq(S), Def),
+         \A g \in [Seq(S) -> T], s \in Seq(S) : Def(g,s) \in T
+  PROVE  f \in [Seq(S) -> T]
+
+StrictSuffixesDetermineDef(S, Def(_,_)) ==
+   \A g,h : \A seq \in Seq(S) :
+      (\A suf \in Seq(S) : IsStrictSuffix(suf,seq) => g[suf] = h[suf])
+      => Def(g, seq) = Def(h, seq)
+
+LEMMA StrictSuffixesDetermineDef_WFDefOn ==
+  ASSUME NEW S, NEW Def(_,_), StrictSuffixesDetermineDef(S, Def)
+  PROVE  WFDefOn(OpToRel(IsStrictSuffix, Seq(S)), Seq(S), Def)
+
+THEOREM SuffixRecursiveSequenceFunctionUnique ==
+  ASSUME NEW S, NEW Def(_,_), StrictSuffixesDetermineDef(S, Def)
+  PROVE  WFInductiveUnique(Seq(S), Def)
+
+THEOREM SuffixRecursiveSequenceFunctionDef ==
+  ASSUME NEW S, NEW Def(_,_), NEW f,
+         StrictSuffixesDetermineDef(S, Def),
+         OpDefinesFcn(f, Seq(S), Def)
+  PROVE  WFInductiveDefines(f, Seq(S), Def)
+
+THEOREM SuffixRecursiveSequenceFunctionType ==
+  ASSUME NEW S, NEW T, NEW Def(_,_), NEW f,
+         T # {},
+         StrictSuffixesDetermineDef(S, Def),
+         WFInductiveDefines(f, Seq(S), Def),
+         \A g \in [Seq(S) -> T], s \in Seq(S) : Def(g,s) \in T
+  PROVE  f \in [Seq(S) -> T]
+
+(***************************************************************************)
+(* The following theorems justify ``primitive recursive'' functions over   *)
+(* sequences, with a base case for the empty sequence and recursion along  *)
+(* either the Tail or the Front of a non-empty sequence.                   *)
+(***************************************************************************)
+
+TailInductiveDefHypothesis(f, S, f0, Def(_,_)) ==
+  f = CHOOSE g : g = [s \in Seq(S) |-> IF s = <<>> THEN f0 ELSE Def(g[Tail(s)], s)]
+
+TailInductiveDefConclusion(f, S, f0, Def(_,_)) ==
+  f = [s \in Seq(S) |-> IF s = <<>> THEN f0 ELSE Def(f[Tail(s)], s)]
+
+THEOREM TailInductiveDef ==
+  ASSUME NEW S, NEW Def(_,_), NEW f, NEW f0,
+         TailInductiveDefHypothesis(f, S, f0, Def)
+  PROVE  TailInductiveDefConclusion(f, S, f0, Def)
+
+THEOREM TailInductiveDefType ==
+  ASSUME NEW S, NEW Def(_,_), NEW f, NEW f0, NEW T,
+         TailInductiveDefConclusion(f, S, f0, Def),
+         f0 \in T,
+         \A v \in T, s \in Seq(S) : s # <<>> => Def(v,s) \in T
+  PROVE  f \in [Seq(S) -> T]
+
+FrontInductiveDefHypothesis(f, S, f0, Def(_,_)) ==
+  f = CHOOSE g : g = [s \in Seq(S) |-> IF s = <<>> THEN f0 ELSE Def(g[Front(s)], s)]
+
+FrontInductiveDefConclusion(f, S, f0, Def(_,_)) ==
+  f = [s \in Seq(S) |-> IF s = <<>> THEN f0 ELSE Def(f[Front(s)], s)]
+
+THEOREM FrontInductiveDef ==
+  ASSUME NEW S, NEW Def(_,_), NEW f, NEW f0,
+         FrontInductiveDefHypothesis(f, S, f0, Def)
+  PROVE  FrontInductiveDefConclusion(f, S, f0, Def)
+
+THEOREM FrontInductiveDefType ==
+  ASSUME NEW S, NEW Def(_,_), NEW f, NEW f0, NEW T,
+         FrontInductiveDefConclusion(f, S, f0, Def),
+         f0 \in T,
+         \A v \in T, s \in Seq(S) : s # <<>> => Def(v,s) \in T
+  PROVE  f \in [Seq(S) -> T]
 
 =============================================================================

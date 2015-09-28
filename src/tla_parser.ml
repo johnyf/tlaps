@@ -11,7 +11,7 @@
     {- {!Proof.Parser}}
     {- {!Module.Parser}}} *)
 
-Revision.f "$Rev: 30204 $";;
+Revision.f "$Rev: 33816 $";;
 
 open Ext
 
@@ -206,142 +206,148 @@ end
 
 let pragma p = punct "(*{" >>> p <<< punct "}*)"
 
-let pickle =
-  let optable = Hashtbl.create 109 in
-  let () =
-    List.iter (fun (syns, rep) -> List.iter (fun syn -> Hashtbl.add optable syn rep) syns)
-      [ [ "-." ],                  "a'uminus" ;
-        [ "^+" ],                  "a'caretplus" ;
-        [ "^*" ],                  "a'caretstar" ;
-        [ "^#" ],                  "a'carethash" ;
-        [ "-|" ],                  "a'dashvert" ;
-        [ "::=" ],                 "a'coloncoloneq" ;
-        [ ":=" ],                  "a'coloneq" ;
-        [ "<" ],                   "a'lt" ;
-        [ "=|" ],                  "a'eqvert" ;
-        [ ">" ],                   "a'gt" ;
-        [ "\\approx" ],            "a'approx" ;
-        [ "\\asymp" ],             "a'asymp" ;
-        [ "\\cong" ],              "a'cong" ;
-        [ "\\doteq" ],             "a'doteq" ;
-        [ "\\geq" ; ">=" ],        "a'gteq" ;
-        [ "\\gg" ],                "a'gtgt" ;
-        [ "<=" ; "=<" ; "\\leq" ], "a'lteq" ;
-        [ "\\ll" ],                "a'ltlt" ;
-        [ "\\prec" ],              "a'prec" ;
-        [ "\\preceq" ],            "a'preceq" ;
-        [ "\\propto" ],            "a'propto" ;
-        [ "\\sim" ],               "a'sim" ;
-        [ "\\simeq" ],             "a'simeq" ;
-        [ "\\succ" ],              "a'succ" ;
-        [ "\\succeq" ],            "a'succeq" ;
-        [ "\\sqsubset" ],          "a'sqsubset" ;
-        [ "\\sqsubseteq" ],        "a'sqsubseteq" ;
-        [ "\\sqsupset" ],          "a'sqsupset" ;
-        [ "\\sqsupseteq" ],        "a'sqsupseteq" ;
-        [ "\\subset" ],            "a'subset" ;
-        [ "\\supset" ],            "a'supset" ;
-        [ "\\supseteq" ],          "a'supseteq" ;
-        [ "|-" ],                  "a'vertdash" ;
-        [ "|=" ],                  "a'verteq" ;
-        [ "@@" ],                  "a'atat" ;
-        [ ":>" ],                  "a'colongt" ;
-        [ "<:" ],                  "a'ltcolon" ;
-        [ ".." ],                  "a'dotdot" ;
-        [ "..." ],                 "a'dotdotdot" ;
-        [ "!!" ],                  "a'bangbang" ;
-        [ "##" ],                  "a'hashhash" ;
-        [ "$" ],                   "a'dollar" ;
-        [ "$$" ],                  "a'dollardollar" ;
-        [ "??" ],                  "a'qmqm" ;
-        [ "\\sqcap" ],             "a'sqcap" ;
-        [ "\\sqcup" ],             "a'sqcup" ;
-        [ "\\uplus" ],             "a'uplus" ;
-        [ "\\wr" ],                "a'wr" ;
-        [ "(+)" ; "\\oplus" ],     "a'oplus" ;
-        [ "+" ],                   "a'plus" ;
-        [ "-" ],                   "a'minus" ;
-        [ "++" ],                  "a'plusplus" ;
-        [ "%" ],                   "a'pc" ;
-        [ "%%" ],                  "a'pcpc" ;
-        [ "|" ],                   "a'vert" ;
-        [ "||" ],                  "a'vertvert" ;
-        [ "\\X" ; "\\times" ],     "a'x" ;
-        [ "(-)" ; "\\ominus" ],    "a'ominus" ;
-        [ "--" ],                  "a'minusminus" ;
-        [ "&" ],                   "a'and" ;
-        [ "&&" ],                  "a'andand" ;
-        [ "(.)" ; "\\odot" ],      "a'odot" ;
-        [ "(/)" ; "\\oslash" ],    "a'oslash" ;
-        [ "(\\X)" ; "\\otimes" ],  "a'otimes" ;
-        [ "*" ],                   "a'ast" ;
-        [ "**" ],                  "a'astast" ;
-        [ "/" ],                   "a'slash" ;
-        [ "//" ],                  "a'slashslash" ;
-        [ "\\bigcirc" ],           "a'bigcirc" ;
-        [ "\\bullet" ],            "a'bullet" ;
-        [ "\\div" ],               "a'div" ;
-        [ "\\o" ; "\\circ" ],      "a'circ" ;
-        [ "\\star" ],              "a'star" ;
-        [ "^" ],                   "a'caret" ;
-        [ "^^" ],                  "a'caretcaret" ;
-        [ "[]" ],                  "a'box" ;
-        [ "<>" ],                  "a'diamond" ;
-        [ "-+->" ],                "a'actplus" ;
-        [ "\\cdot" ],              "a'cdot" ;
-        [ "'" ],                   "a'prime" ;
-      ] in
-  let module SS = Set.Make (String) in
-  let tla_keys = [
-      (* Isabelle/TLA+ types and definitions -- see tools/all_defs.sml *)
-      "All"; "Append"; (* "BOOLEAN"; *) "Bijections"; "Case";
-      "CaseArm"; "CaseOther"; "Char"; "Choice"; (* "DOMAIN"; *)
-      "EnumFuncSet"; "Ex"; (* "FALSE"; *) "Fcn"; "FuncSet"; "INTER";
-      "Id"; "Image"; "Injections"; "Injective"; "InjectiveOn"; "Int";
-      "Inverse"; "Len"; "Let"; "Monotonic"; "Nat"; "Nibble"; "Not";
-      "PeanoAxioms"; "Pred"; "Product"; "Range"; (* "SUBSET"; *)
-      "Seq"; "String"; "Succ"; "Surjections"; "Surjective";
-      (* "TRUE"; *) "TYPE"; "Trueprop"; (* "UNION"; *) "Zero"; "abs";
-      "addElt"; "addnat"; "all"; "antisymmetric"; "any"; "aprop";
-      "arbitrary"; "args"; "arith_add"; "asms"; "bAll"; "bChoice";
-      "bEx"; "boolify"; "c"; "cap"; "cargs"; "case_arm"; "case_arms";
-      "cases_conj"; "cases_equal"; "cases_forall"; "cases_implies";
-      "char"; "cidts"; "classes"; "cond"; "conj"; "conjunction";
-      "converse"; "cs"; "cup"; "default"; "diff"; "diffnat"; "disj";
-      "div"; "divmodNat"; "divmod_rel"; "domrng"; "domrngs"; "dummy";
-      "dummy_pattern"; "dvd"; "emptySeq"; "eq"; "equivalence";
-      "except"; "extend"; "fapply"; "float_const"; "float_token";
-      "fun"; "geq"; "gfp"; "greater"; "id"; "idt"; "idts"; "iff";
-      "imp"; "in"; "index"; "infinity"; "irreflexive"; "isAFcn";
-      "isASeq"; "isBool"; "isNeg"; "isPos"; "itself"; "leq"; "less";
-      "letbind"; "letbinds"; "lfp"; "logic"; "longid"; "minus";
-      "mod"; "mult"; "multnat"; "natInterval"; "num"; "num_const";
-      "oneArg"; "prod"; "prop"; "psubset"; "psupset"; "pttrn";
-      "pttrns"; "reflexive"; "rel_comp"; "rel_domain"; "rel_image";
-      "rel_range"; "setOfAll"; "setOfPairs"; "setminus"; "sgn";
-      "sort"; "sort_constraint"; "struct"; "subsetOf"; "subseteq";
-      "symmetric"; "term"; "tid"; "tpl"; "transitive"; "tvar";
-      "type"; "types"; "upair"; "upto"; "var"; "xcpt"; "xnum";
-      "xstr";
-    ]
-  in
-  let idtable =
-    List.fold_left begin
-      fun sks s -> SS.add s sks
-    end SS.empty (tla_keys @ Isabelle_keywords.v)
-  in
-  (* special tokens that are apparently illegal *)
-  let idtable = SS.add "O" idtable in
-  fun id ->
-    let id = String.copy id in
+(*****************************************************************)
+
+(* Function: [pickle : string -> string]
+
+   Transcode a TLA+ identifier into an identifier suitable for all the
+   back-end provers.
+
+   The result must match [a-zA-Z]([a-zA-Z0-9_]*[a-zA-Z])?
+   There are a number of keywords that must be avoided:
+   Isabelle keywords, Isabelle/TLA+ identifiers, some keywords of the SMT
+   provers.
+   The [pickle] function must be injective, and its range must not include
+   any identifier starting with "str_", "prm_", or any three letters
+   followed by an underscore.
+
+   Algorithm:
+   - if the identifier has no special characters, starts and ends with a
+     letter, and is not one of the keywords, leave it alone.
+   - otherwise:
+     + first replace every character not in [a-zA-Z0-9] with a 4-letter
+       name followed by an underscore
+     + then prepend "a_" and append "a"
+*)
+
+let charname c =
+  match c with
+  | '!'  -> Some "excl_"
+  | '#'  -> Some "hash_"
+  | '$'  -> Some "doll_"
+  | '%'  -> Some "perc_"
+  | '&'  -> Some "ampe_"
+  | '\'' -> Some "quot_"
+  | '('  -> Some "lpar_"
+  | ')'  -> Some "rpar_"
+  | '*'  -> Some "star_"
+  | '+'  -> Some "plus_"
+  | '-'  -> Some "dash_"
+  | '.'  -> Some "peri_"
+  | '/'  -> Some "slas_"
+  | ':'  -> Some "colo_"
+  | '<'  -> Some "less_"
+  | '='  -> Some "equa_"
+  | '>'  -> Some "more_"
+  | '?'  -> Some "ques_"
+  | '@'  -> Some "atsi_"
+  | '['  -> Some "lbrk_"
+  | '\\' -> Some "bksl_"
+  | ']'  -> Some "rbrk_"
+  | '^'  -> Some "care_"
+  | '_'  -> Some "unde_"
+  | '|'  -> Some "vert_"
+  | '~'  -> Some "tild_"
+  | 'a'..'z' | 'A'..'Z' | '0'..'9' -> None
+  | _ -> assert false
+;;
+
+let has_special_chars s =
+  try
+    for i = 0 to String.length s - 1 do
+      if charname s.[i] <> None then raise Exit;
+    done;
+    false
+  with Exit -> true
+;;
+
+let isabelle_tlaplus_keys = [
+    (* Isabelle/TLA+ types and definitions -- see tools/all_defs.sml *)
+    "All"; "Append"; (* "BOOLEAN"; *) "Bijections"; "Case";
+    "CaseArm"; "CaseOther"; "Char"; "Choice"; (* "DOMAIN"; *)
+    "EnumFuncSet"; "Ex"; (* "FALSE"; *) "Fcn"; "FuncSet"; "INTER";
+    "Id"; "Image"; "Injections"; "Injective"; "InjectiveOn"; "Int";
+    "Inverse"; "Len"; "Let"; "Monotonic"; "Nat"; "Nibble"; "Not";
+    "PeanoAxioms"; "Pred"; "Product"; "Range"; (* "SUBSET"; *)
+    "Seq"; "String"; "Succ"; "Surjections"; "Surjective";
+    (* "TRUE"; *) "TYPE"; "Trueprop"; (* "UNION"; *) "Zero"; "abs";
+    "addElt"; "addnat"; "all"; "antisymmetric"; "any"; "aprop";
+    "arbitrary"; "args"; "arith_add"; "asms"; "bAll"; "bChoice";
+    "bEx"; "boolify"; "c"; "cap"; "cargs"; "case_arm"; "case_arms";
+    "cases_conj"; "cases_equal"; "cases_forall"; "cases_implies";
+    "char"; "cidts"; "classes"; "cond"; "conj"; "conjunction";
+    "converse"; "cs"; "cup"; "default"; "diff"; "diffnat"; "disj";
+    "div"; "divmodNat"; "divmod_rel"; "domrng"; "domrngs"; "dummy";
+    "dummy_pattern"; "dvd"; "emptySeq"; "eq"; "equivalence";
+    "except"; "extend"; "fapply"; "float_const"; "float_token";
+    "fun"; "geq"; "gfp"; "greater"; "id"; "idt"; "idts"; "iff";
+    "imp"; "in"; "index"; "infinity"; "irreflexive"; "isAFcn";
+    "isASeq"; "isBool"; "isNeg"; "isPos"; "itself"; "leq"; "less";
+    "letbind"; "letbinds"; "lfp"; "logic"; "longid"; "minus";
+    "mod"; "mult"; "multnat"; "natInterval"; "num"; "num_const";
+    "oneArg"; "prod"; "prop"; "psubset"; "psupset"; "pttrn";
+    "pttrns"; "reflexive"; "rel_comp"; "rel_domain"; "rel_image";
+    "rel_range"; "setOfAll"; "setOfPairs"; "setminus"; "sgn";
+    "sort"; "sort_constraint"; "struct"; "subsetOf"; "subseteq";
+    "symmetric"; "term"; "tid"; "tpl"; "transitive"; "tvar";
+    "type"; "types"; "upair"; "upto"; "var"; "xcpt"; "xnum";
+    "xstr";
+  ]
+;;
+
+(* FIXME this list is obviously incomplete *)
+let other_keys = [
+  "O";      (* "apparently illegal" [Kaustuv, commit 16156] *)
+  "max";    (* reserved word in Z3 v4.0 *)
+  "u";      (* not allowed in CVC3 *)
+  "status"; (* keyword in Spass *)
+];;
+
+module SS = Set.Make (String);;
+
+let forbidden =
+  let f set str = SS.add str set in
+  let res = List.fold_left f SS.empty isabelle_tlaplus_keys in
+  let res = List.fold_left f res Isabelle_keywords.v in
+  let res = List.fold_left f res other_keys in
+  res
+;;
+
+let is_nonletter c =
+  match c with
+  | 'a'..'z' | 'A'..'Z' -> false
+  | _ -> true
+;;
+
+let pickle id =
+  (* uncomment this to detect double-pickling
+     It cannot go into production code because it also breaks when some user
+     identifier begins with "a_".
+     assert (String.length id < 2 || id.[0] <> 'a' || id.[1] <> '_');
+  *)
+  if is_nonletter id.[0]
+     || is_nonletter id.[String.length id - 1]
+     || has_special_chars id
+     || SS.mem id forbidden
+  then begin
+    let b = Buffer.create 20 in
     for i = 0 to String.length id - 1 do
-      if id.[i] = '!' then id.[i] <- '\''
-    done ;
-    if Hashtbl.mem optable id then Hashtbl.find optable id
-    else
-      let id0 = Char.code (id.[0]) in
-      if id0 = Char.code '_'
-        || (Char.code '0' <= id0 && id0 <= Char.code '9')
-        || SS.mem id idtable
-      then "a'" ^ id
-      else id
+      match charname id.[i] with
+      | Some s -> Buffer.add_string b s
+      | None -> Buffer.add_char b id.[i]
+    done;
+    "a_" ^ Buffer.contents b ^ "a"
+  end else begin
+    id
+  end
+;;

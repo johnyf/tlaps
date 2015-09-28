@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 28687 $";;
+Revision.f "$Rev: 33173 $";;
 
 open Property
 
@@ -170,7 +170,7 @@ and hyp h g = match h.core, g.core with
   | Flex _, Flex _ -> true
   | Defn (d, _, _, dx), Defn (e, _, _, ex) ->
       defn d e && dx = ex
-  | Fact (e, _), Fact (f, _) ->
+  | Fact (e, _, _), Fact (f, _, _) ->
       expr e f
   | _ -> false
 

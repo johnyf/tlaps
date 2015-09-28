@@ -10,6 +10,8 @@ Number == Nat \ {0}
 CONSTANTS M, N
 VARIABLES x, y
 
+ASSUME NumberAssumption == M \in Number /\ N \in Number
+
 Init == (x = M) /\ (y = N)
 
 Next == \/ /\ x < y
@@ -23,15 +25,16 @@ Spec == Init /\ [][Next]_<<x,y>>
 
 ResultCorrect == (x = y) => x = GCD(M, N)
 
-InductiveInvariant == /\ x \in Number
-                      /\ y \in Number
-                      /\ GCD(x, y) = GCD(M, N)
+InductiveInvariant ==
+  /\ x \in Number
+  /\ y \in Number
+  /\ GCD(x, y) = GCD(M, N)
 
-ASSUME NumberAssumption == M \in Number /\ N \in Number
+USE DEF Number
 
 THEOREM InitProperty == Init => InductiveInvariant
   BY NumberAssumption DEF Init, InductiveInvariant
-  
+
 AXIOM GCDProperty1 == \A p \in Number : GCD(p, p) = p
 AXIOM GCDProperty2 == \A p, q \in Number : GCD(p, q) = GCD(q, p)
 AXIOM GCDProperty3 == \A p, q \in Number : (p < q) => GCD(p, q) = GCD(p, q-p)
@@ -55,9 +58,17 @@ THEOREM NextProperty == InductiveInvariant /\ Next => InductiveInvariant'
     BY <1>b, <2>1, GCDProperty3
   <2>4. QED
     BY <1>b, <2>1, <2>2, GCDProperty2
-<1>2. QED
+<1> QED
   BY <1>1, <1>a, <1>b
 
 THEOREM Correctness == Spec => []ResultCorrect
+  <1>1 InductiveInvariant /\ UNCHANGED <<x,y>> => InductiveInvariant'
+    BY DEF InductiveInvariant
+  <1>2 Spec => []InductiveInvariant
+    BY PTL, InitProperty, NextProperty, <1>1 DEF Spec
+  <1>3 InductiveInvariant => ResultCorrect
+    BY GCDProperty1 DEF InductiveInvariant, ResultCorrect
+  <1> QED
+    BY PTL, <1>2, <1>3
 
 =======================================================

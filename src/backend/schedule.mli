@@ -45,7 +45,8 @@ and result =
   | Stopped_timeout
 ;;
 
-val run : int -> Unix.file_descr option -> task list -> bool;;
-(* [run max_threads control_fd tasks]
-   return true if the run was aborted by the toolbox "kill" command
+val run : int -> task list -> unit;;
+(* [run max_threads tasks]
+   Run the tasks described by [tasks], launching at most [max_threads]
+   simultatenous processes.
  *)

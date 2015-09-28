@@ -74,6 +74,7 @@ module Std : sig
   val finally : (unit -> unit) -> ('a -> 'b) -> 'a -> 'b
 end;;
 
+val string_contains : string -> string -> bool
 val is_prefix : string -> string -> bool
 (** [starts_with prefix text]
     Return [true] if [prefix] is a prefix of [text] *)

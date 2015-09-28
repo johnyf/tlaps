@@ -40,7 +40,7 @@ ExistsBijection(S,T)  == Bijection(S,T) # {}
 (***************************************************************************)
 JectionInverse(S,T,M) == [t \in T |-> CHOOSE s \in S : M[s] = t]
 
-JectionIverseSets(S, T, M, B) == { s \in S : M[s] \in B } 
+JectionInverseSets(S, T, M, B) == { s \in S : M[s] \in B } 
 =============================================================================
 \* Modification History
 \* Last modified Wed Jun 05 12:14:19 CEST 2013 by bhargav

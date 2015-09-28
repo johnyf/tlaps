@@ -7,7 +7,7 @@
 
 (** default visitors for proofs *)
 
-Revision.f "$Rev: 32215 $";;
+Revision.f "$Rev: 33173 $";;
 
 open Ext
 
@@ -20,7 +20,7 @@ open Expr.T
 open P_t
 
 let dummy = At false @@ nowhere
-let dummy_fact = Fact (dummy, Visible) @@ nowhere
+let dummy_fact = Fact (dummy, Visible, Always) @@ nowhere
 
 let rec bump scx = function
   | 0 -> scx
@@ -48,7 +48,8 @@ class virtual ['hyp] map = object (self : 'self)
   method step scx st =
     let stepnm = string_of_stepno (Property.get st Props.step) in
     let adj_step scx =
-      Expr.Visit.adj scx (Defn (Operator (stepnm @@ st, dummy) @@ st, Proof, Visible, Local) @@ st)
+      Expr.Visit.adj scx (Defn (Operator (stepnm @@ st, dummy) @@ st, Proof
+      Always, Visible, Local) @@ st)
     in
     match st.core with
       | Forget k ->
@@ -212,7 +213,8 @@ class virtual ['hyp] iter = object (self : 'self)
   method step scx st =
     let stepnm = string_of_stepno (Property.get st Props.step) in
     let adj_step scx =
-      Expr.Visit.adj scx (Defn (Operator (stepnm @@ st, dummy) @@ st, Proof, Visible, Local) @@ st)
+      Expr.Visit.adj scx (Defn (Operator (stepnm @@ st, dummy) @@ st, Proof
+      Always, Visible, Local) @@ st)
     in
     match st.core with
       | Forget k ->

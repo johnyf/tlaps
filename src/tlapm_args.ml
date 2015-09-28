@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32333 $";;
+Revision.f "$Rev: 34540 $";;
 
 open Ext
 open Params
@@ -34,13 +34,11 @@ let set_target_start s =
   tb_sl := s
 
 let set_target_end e =
-  tb_el := e;
-  if !tb_sl = 0 && e = 0 then toolbox_all := true
-
+  tb_el := if e = 0 then max_int else e
 
 let set_default_method meth =
   try set_default_method meth
-  with Failure msg -> raise (Arg.Bad ("--methods: " ^ msg))
+  with Failure msg -> raise (Arg.Bad ("--method: " ^ msg))
 ;;
 
 (* FIXME use Arg.parse instead *)
@@ -105,6 +103,19 @@ let deprecated flag nargs =
   | _ ->
      let args = Array.to_list (Array.make nargs (Arg.String f)) in
      flag, Arg.Tuple args, ""
+;;
+
+let quote_if_needed s =
+  let check c =
+    match c with
+    | '+' | ',' | '-' | '.' | '/' | '0'..'9' | ':' | '=' | '@' | 'A'..'Z'
+      | '_' | 'a'..'z' -> ()
+    | _ -> raise Exit
+  in
+  if s = "" then Filename.quote s else begin
+    try String.iter check s; s
+    with Exit -> Filename.quote s
+  end
 ;;
 
 let init () =
@@ -206,7 +217,8 @@ let init () =
   if !show_config then exit 0 ;
   if !mods = [] then begin
     Arg.usage opts
-      (Printf.sprintf "Need at least one module file.\n\nUsage: %s <options> FILE ...\noptions are:"
+      (Printf.sprintf "Need at least one module file.\n\n\
+                       Usage: %s <options> FILE ...\noptions are:"
          (Filename.basename Sys.executable_name)) ;
     exit 2
   end ;
@@ -216,14 +228,14 @@ let init () =
   end ;
   check_zenon_ver () ;
   if !Params.toolbox then begin
-    Printf.printf "\n(* TLAPM version %d.%d.%d (commit %s) *)\n"
+    Printf.printf "\n\\* TLAPM version %d.%d.%d (commit %s)\n"
                   Version.major Version.minor Version.micro (Revision.get ());
     let tm = Unix.localtime (Unix.gettimeofday ()) in
-    Printf.printf "(* launched at %04d-%02d-%02d %02d:%02d:%02d"
+    Printf.printf "\\* launched at %04d-%02d-%02d %02d:%02d:%02d"
                   (tm.Unix.tm_year + 1900) (tm.Unix.tm_mon + 1) tm.Unix.tm_mday
                   tm.Unix.tm_hour tm.Unix.tm_min tm.Unix.tm_sec;
-    Printf.printf " with command line: *)\n(*";
-    Array.iter (fun s -> Printf.printf " %s" s) Sys.argv;
-    Printf.printf " *)\n\n%!"
+    Printf.printf " with command line:\n\\*";
+    Array.iter (fun s -> Printf.printf " %s" (quote_if_needed s)) Sys.argv;
+    Printf.printf "\n\n%!"
   end;
   !mods

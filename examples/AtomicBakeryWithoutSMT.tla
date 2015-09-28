@@ -325,10 +325,10 @@ THEOREM TypeOKInvariant ==
 <1>9. QED
   BY p(self), <1>1, <1>2, <1>3, <1>4, <1>5, <1>6, <1>7, <1>8 DEF p
 
-THEOREM Init => Inv
+THEOREM InitInv == Init => Inv
 BY InitImpliesTypeOK DEF Init, Inv, IInv
 
-THEOREM Inv => MutualExclusion
+THEOREM InvExclusion == Inv => MutualExclusion
 BY DEF Inv, IInv, MutualExclusion, After
 
 (***************************************************************************)
@@ -343,7 +343,7 @@ THEOREM AfterPrime ==
   BY DEF After, GG
 
 
-THEOREM Inv /\ Next => Inv'
+THEOREM InductiveInvariant == Inv /\ Next => Inv'
 <1>. SUFFICES ASSUME NEW i \in P,
                      NEW self \in P,
                      TypeOK,
@@ -663,5 +663,12 @@ THEOREM Inv /\ Next => Inv'
 
 <1>10. QED
   BY <1>1, <1>2a, <1>2b, <1>3, <1>4, <1>5a, <1>5b, <1>6, <1>7, <1>8, <1>9 DEF p
+
+THEOREM Safety == Spec => [] MutualExclusion
+<1>1 Inv /\ UNCHANGED vars => Inv'
+  BY DEF vars, TypeOK, Inv, IInv, After, GG
+<1> QED
+  BY <1>1, InitInv, InductiveInvariant, InvExclusion, PTL
+     DEF Spec
 
 =============================================================================

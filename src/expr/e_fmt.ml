@@ -12,9 +12,9 @@
  *
  * END dflags *)
 
-Revision.f "$Rev: 28687 $";;
+Revision.f "$Rev: 33816 $";;
 
-(* FIXME remove all non-ASCII characters *)
+(* FIXME remove all non-ASCII characters from this source file *)
 
 open Ext
 open Property
@@ -49,7 +49,7 @@ let rec adjs cx = function
 
 let is_hidden h = match h.core with
   | Defn (_, _, us, _)
-  | Fact (_, us) -> us = Hidden
+  | Fact (_, us,_) -> us = Hidden
   | _ -> false
 
 let rec is_with e = match e.core with
@@ -69,12 +69,12 @@ let elide h =
       | Defn (df, wd, us, _) ->
           not (Params.debugging "alldefs")
           && (us = Hidden || has_with df || wd <> User)
-      | Fact (e, us) ->
+      | Fact (e, us,_) ->
           us = Hidden || is_with e
       | _ -> false
   end
 
-let rec fmt_expr cx ew = match ew.core with
+let rec fmt_expr ?(temp=false) cx ew = match ew.core with
   | ( Ix _ | Opaque _ | Internal _ ) ->
       fmt_apply cx ew []
   | Lambda (vss, e) ->
@@ -82,39 +82,39 @@ let rec fmt_expr cx ew = match ew.core with
   | Bang (e, sels) ->
       Fu.Atm begin
         fun ff ->
-          pp_print_expr cx ff e ;
+          pp_print_expr ~temp:temp cx ff e ;
           pp_print_sels cx ff sels
       end
   | Apply (op, args) ->
       fmt_apply cx op args
   | Sequent sq ->
-      Fu.Big (fun ff -> ignore (pp_print_sequent cx ff sq))
+      Fu.Big (fun ff -> ignore (pp_print_sequent ~temp:temp cx ff sq))
   | With (e, m) ->
       if Params.debugging "meth" then
         Fu.Atm begin fun ff ->
           fprintf ff "@[<hov2>(%a (* : %a *))@]"
-            (pp_print_expr cx) e
+            (pp_print_expr ~temp:temp cx) e
             Method.pp_print_method m
         end
-      else fmt_expr cx e
+      else fmt_expr ~temp:temp cx e
   | If (e, f, g) ->
       Fu.Big begin
         fun ff ->
           fprintf ff "@[<hv2>@[<b2>IF@ %a@]@ @[<b2>THEN %a@]@ @[<b2>ELSE %a@]@]"
-            (pp_print_expr cx) e
-            (pp_print_expr cx) f
-            (pp_print_expr cx) g
+            (pp_print_expr ~temp:temp cx) e
+            (pp_print_expr ~temp:temp cx) f
+            (pp_print_expr ~temp:temp cx) g
       end
   | List (Refs, []) ->
       Fu.Atm (fun ff -> pp_print_string ff "TRUE")
   | List (Refs, [e]) ->
-      fmt_expr cx e
+      fmt_expr ~temp:temp cx e
   | List (q, es) ->
       let qrep = match q with
         | And | Refs -> "/\\"
         | _   -> "\\/" in
       let pp_print_elem ff e =
-        fprintf ff "@[<h>%s %a@]" qrep (pp_print_expr cx) e
+        fprintf ff "@[<h>%s %a@]" qrep (pp_print_expr ~temp:temp cx) e
       in
       Fu.Big begin
         fun ff ->
@@ -125,7 +125,7 @@ let rec fmt_expr cx ew = match ew.core with
       Fu.Big (fun ff ->
                 fprintf ff "@[<hv0>LET @[<v0>" ;
                 let cx = pp_print_defns cx ff ds in
-                fprintf ff "@]@\nIN  %a@]" (pp_print_expr cx) e)
+                fprintf ff "@]@\nIN  %a@]" (pp_print_expr ~temp:temp cx) e)
   | Quant (q, bs, e) ->
       let (ecx, bsf) = fmt_bounds cx bs in
       let rep = match q with
@@ -134,7 +134,7 @@ let rec fmt_expr cx ew = match ew.core with
       in
       Fu.Big (fun ff ->
                 fprintf ff "@[<b3>%s @[<b0>%t@] :@ %a@]"
-                  rep bsf (pp_print_expr ecx) e)
+                  rep bsf (pp_print_expr ~temp:temp ecx) e)
 
   | Tquant (q, vs, e) ->
       let (ecx, vs) = adjs cx vs in
@@ -146,124 +146,138 @@ let rec fmt_expr cx ew = match ew.core with
                 fprintf ff "@[<b4>%s @[<b0>%a@] : %a@]"
                   rep
                   (pp_print_delimited pp_print_string) vs
-                  (pp_print_expr ecx) e)
+                  (pp_print_expr ~temp:temp ecx) e)
   | Choose (v, optdom, e) ->
       let (ecx, v) = adj cx v in
       begin match optdom with
         | Some dom ->
             Fu.Big begin fun ff ->
               fprintf ff "@[<b2>CHOOSE @[<b2>%s \\in@ %a@] :@ %a@]"
-                v (pp_print_expr cx) dom
-                (pp_print_expr ecx) e
+                v (pp_print_expr ~temp:temp cx) dom
+                (pp_print_expr ~temp:temp ecx) e
             end
         | None ->
             Fu.Big begin fun ff ->
               fprintf ff "@[<b2>CHOOSE %s :@ %a@]"
-                v (pp_print_expr ecx) e
+                v (pp_print_expr ~temp:temp ecx) e
             end
       end
   | SetSt (v, dom, e) ->
       let (ecx, v) = adj cx v in
       Fu.Atm (fun ff ->
                 fprintf ff "@[<b3>{@[<b2>%s \\in@ %a@] :@ %a}@]"
-                  v (pp_print_expr cx) dom
-                  (pp_print_expr ecx) e)
+                  v (pp_print_expr ~temp:temp cx) dom
+                  (pp_print_expr ~temp:temp ecx) e)
   | SetOf (e, bs) ->
       let (ecx, bsf) = fmt_bounds cx bs in
       Fu.Atm (fun ff ->
                 fprintf ff "@[<b3>{%a :@ %t}@]"
-                  (pp_print_expr ecx) e bsf)
+                  (pp_print_expr ~temp:temp ecx) e bsf)
   | SetEnum es ->
       Fu.Atm begin
         fun ff ->
           fprintf ff "@[<h>{@[<b0>%a@]}@]"
-            (pp_print_delimited (pp_print_expr cx)) es
+            (pp_print_delimited (pp_print_expr ~temp:temp cx)) es
       end
   | Arrow (e, f) ->
       Fu.Atm begin
         fun ff ->
           fprintf ff "@[<b3>[%a ->@ %a]@]"
-            (pp_print_expr cx) e
-            (pp_print_expr cx) f
+            (pp_print_expr ~temp:temp cx) e
+            (pp_print_expr ~temp:temp cx) f
       end
   | Fcn (bs, e) ->
       let (ecx, bsf) = fmt_bounds cx bs in
       Fu.Atm (fun ff ->
                 fprintf ff "@[<b3>[%t |->@ %a]@]"
-                  bsf (pp_print_expr ecx) e)
+                  bsf (pp_print_expr ~temp:temp ecx) e)
   | FcnApp (f, es) ->
+      let e = fmt_expr ~temp cx f in
+      let (lpar, rpar) =
+        match e with
+        | Fu.Atm _ -> "", ""
+        | _ -> "(", ")"
+      in
       Fu.Atm begin
         fun ff ->
-          fprintf ff "@[<h>%a@[<b1>[%a]@]@]"
-            (pp_print_expr cx) f
-            (pp_print_delimited (pp_print_expr cx)) es
+          fprintf ff "@[<h>%s%a%s@[<b1>[%a]@]@]"
+            lpar
+            Fu.pp_print_minimal e
+            rpar
+            (pp_print_delimited (pp_print_expr ~temp:temp cx)) es
       end
   | Product [e] ->
-      fmt_expr cx e
+      fmt_expr ~temp:temp cx e
   | Product (e :: es) ->
-      Fu.Op begin
+      (* FIXME this should be a Fu.Big because \X is neither right nor
+         left-associative. *)
+      Fu.Op (
+        "\\X",
         (fun ff -> fprintf ff "@ \\X "),
         (10, 13),
-        Fu.Infix (Fu.Right, fmt_expr cx e, fmt_expr cx (Product es @@ ew))
-      end
+        Fu.Infix (Fu.Right, fmt_expr ~temp:temp cx e,
+                  fmt_expr ~temp:temp cx (Product es @@ ew))
+      )
   | Product _ -> Errors.bug ~at:ew "Expr.Fmt.fmt_expr: PRODUCT []"
   | Tuple es ->
       Fu.Atm begin
         fun ff ->
           fprintf ff "@[<b2><<%a>>@]"
-            (pp_print_delimited (pp_print_expr cx)) es
+            (pp_print_delimited (pp_print_expr ~temp:temp cx)) es
       end
   | Rect fs ->
       Fu.Atm (fun ff ->
                 fprintf ff "@[<b1>[%a]@]"
                   (pp_print_delimited
                      (fun ff (v, e) ->
-                        fprintf ff "@[<h>%s : %a@]" v (pp_print_expr cx) e)) fs)
+                        fprintf ff "@[<h>%s : %a@]" v (pp_print_expr ~temp:temp cx) e)) fs)
   | Record fs ->
       Fu.Atm (fun ff ->
                fprintf ff "@[<b1>[%a]@]"
                   (pp_print_delimited
                      (fun ff (v, e) ->
-                        fprintf ff "@[<h>%s |-> %a@]" v (pp_print_expr cx) e)) fs)
+                        fprintf ff "@[<h>%s |-> %a@]" v (pp_print_expr ~temp:temp cx) e)) fs)
   | Except (e, xs) ->
       Fu.Atm (fun ff ->
                 fprintf ff "@[<b3>[%a EXCEPT@ @[<v0>%a@]]@]"
-                  (pp_print_expr cx) e
+                  (pp_print_expr ~temp:temp cx) e
                   (pp_print_delimited
                      (fun ff (tr, e) ->
                         fprintf ff "!@[<h>%a = %a@]"
                           (pp_print_delimited ~sep:(fun ff () -> ())
                              (fun ff -> function
                                 | Except_dot s -> fprintf ff ".%s" s
-                                | Except_apply e -> fprintf ff "[%a]" (pp_print_expr cx) e))
+                                | Except_apply e -> fprintf ff "[%a]" (pp_print_expr ~temp:temp cx) e))
                           tr
-                          (pp_print_expr cx)
+                          (pp_print_expr ~temp:temp cx)
                           e))
                   xs)
   | Dot (e, f) ->
-      Fu.Op ((fun ff -> pp_print_string ff "."),
+      Fu.Op (".",
+             (fun ff -> pp_print_string ff "."),
              (16, 16),
-             Fu.Infix (Fu.Left, fmt_expr cx e, Fu.Atm (fun ff -> pp_print_string ff f)))
+             Fu.Infix (Fu.Left, fmt_expr ~temp:temp cx e,
+                       Fu.Atm (fun ff -> pp_print_string ff f)))
   | Sub (q, e, f) ->
       Fu.Atm (fun ff ->
                 fprintf ff "@[<h>%s@[<b2>%a@]%s%a@]"
                   (match q with Box -> "[" | _ -> "<<")
-                  (pp_print_expr cx) e
+                  (pp_print_expr ~temp:temp cx) e
                   (match q with Box -> "]_" | _ -> ">>_")
-                  (pp_print_expr cx) f)
+                  (pp_print_expr ~temp:temp cx) f)
   | Tsub (q, e, f) ->
       Fu.Atm (fun ff ->
                 fprintf ff "@[<h>%s@[<b2>%a@]%s%a@]"
                   (match q with Box -> "[][" | _ -> "<><<")
-                  (pp_print_expr cx) e
+                  (pp_print_expr ~temp:temp cx) e
                   (match q with Box -> "]_" | _ -> ">>_")
-                  (pp_print_expr cx) f)
+                  (pp_print_expr ~temp:temp cx) f)
   | Fair (q, e, f) ->
       Fu.Big (fun ff ->
                 fprintf ff "@[<h>%s_%a (%a)@]"
                   (match q with Weak -> "WF" | _ -> "SF")
-                  (pp_print_with_parens (pp_print_expr cx)) e
-                  (pp_print_expr cx) f)
+                  (pp_print_with_parens (pp_print_expr ~temp:temp cx)) e
+                  (pp_print_expr ~temp:temp cx) f)
   | Case (arms, oth) ->
       Fu.Big (fun ff ->
                 fprintf ff "@[<v2>CASE %a%a@]"
@@ -271,14 +285,14 @@ let rec fmt_expr cx ew = match ew.core with
                      ~sep:(fun ff () -> fprintf ff "@,[] ")
                      (fun ff (e, f) ->
                         fprintf ff "@[<b2>%a ->@ %a@]"
-                          (pp_print_expr cx) e
-                          (pp_print_expr cx) f))
+                          (pp_print_expr ~temp:temp cx) e
+                          (pp_print_expr ~temp:temp cx) f))
                   arms
                   (fun ff -> function
                      | None -> ()
                      | Some oth ->
                          fprintf ff "@,[] @[<b2>OTHER ->@ %a@]"
-                           (pp_print_expr cx) oth)
+                           (pp_print_expr ~temp:temp cx) oth)
                   oth)
   | String s ->
       Fu.Atm (fun ff ->
@@ -290,7 +304,7 @@ let rec fmt_expr cx ew = match ew.core with
   | At _ ->
       Fu.Atm (fun ff -> pp_print_string ff "@")
   | Parens (e, {core = Nlabel (l, []) | Xlabel (l, [])}) -> begin
-      let f = fmt_expr cx e in
+      let f = fmt_expr ~temp:temp cx e in
       match f with
         | Fu.Atm _ | Fu.Big _ ->
             Fu.Atm (fun ff -> fprintf ff "%s::%a" l Fu.pp_print_minimal f)
@@ -298,7 +312,7 @@ let rec fmt_expr cx ew = match ew.core with
             Fu.Atm (fun ff -> fprintf ff "%s::(%a)" l Fu.pp_print_minimal f)
     end
   | Parens (e, {core = Nlabel (l, xs)}) -> begin
-      let fe = fmt_expr cx e in
+      let fe = fmt_expr ~temp:temp cx e in
       let fmt = match fe with
         | Fu.Atm _ ->
             format_of_string "%s(%a)::%a"
@@ -319,9 +333,9 @@ let rec fmt_expr cx ew = match ew.core with
           try Ctx.string_of_ident (fst (Ctx.index (snd cx) x)) @@ h
           with _ -> ("¶" ^ string_of_int x) @@ h
       end xs in
-      fmt_expr cx (Parens (e, Nlabel (l, xs) @@ e) @@ e)
+      fmt_expr ~temp:temp cx (Parens (e, Nlabel (l, xs) @@ e) @@ e)
   | Parens (e, {core = Syntax}) ->
-      fmt_expr cx e
+      fmt_expr ~temp:temp cx e
 
 and pp_print_bang ff () =
   if Params.debugging "garish" then
@@ -372,16 +386,18 @@ and pp_print_shape ff = function
 
 and fmt_apply (hx, vx as cx) op args = match op.core, args with
   | Lambda (vss, e), _ ->
-      Fu.Op begin
+      Fu.Op (
+        " ",
         (fun ff -> pp_print_space ff ()), (20, 20),
-        Fu.Infix begin
+        Fu.Infix (
           Fu.Left,
           Fu.Big (fun ff -> pp_print_lambda cx ff vss e),
-          Fu.Atm begin
-            fun ff -> fprintf ff "(%a)" (pp_print_delimited (pp_print_expr cx)) args
-          end
-        end
-      end
+          Fu.Atm (
+            fun ff ->
+              fprintf ff "(%a)" (pp_print_delimited (pp_print_expr cx)) args
+          )
+        )
+      )
   | Bang _, [] ->
       fmt_expr cx op
   | Bang _, _ ->
@@ -392,10 +408,12 @@ and fmt_apply (hx, vx as cx) op args = match op.core, args with
             (pp_print_delimited (pp_print_expr cx)) args
       end
   | Internal Builtin.Prime, [e] when !Params.notl ->
-      Fu.Op begin
+      Fu.Op (
+        "#$",
         (fun ff -> pp_print_string ff "#$"),
-        (15, 15), Fu.Postfix (fmt_expr cx e)
-      end
+        (15, 15),
+        Fu.Postfix (fmt_expr cx e)
+      )
   | Internal (Builtin.Box false), [e] when Params.debugging "temporal" ->
       Fu.Atm (fun ff -> fprintf ff "[](%a)" (pp_print_expr cx) e)
   | Internal (Builtin.Box false), [e]
@@ -453,35 +471,38 @@ and fmt_apply (hx, vx as cx) op args = match op.core, args with
                 then format_of_string "%s@ "
                 else format_of_string "%s"
               in
-              Fu.Op begin
+              Fu.Op (
+               top.Optable.name,
                (fun ff -> fprintf ff fmt top.Optable.name),
                top.Optable.prec,
                Fu.Prefix (fmt_expr cx (List.hd args))
-             end
+             )
           | Optable.Postfix when List.length args = 1 ->
-              Fu.Op begin
+              Fu.Op (
+                top.Optable.name,
                 (fun ff -> fprintf ff "%s" top.Optable.name),
                 top.Optable.prec,
                 Fu.Postfix (fmt_expr cx (List.hd args))
-              end
+              )
           | Optable.Infix assoc when List.length args = 2 ->
               let fmt =
                 if top.Optable.name = ".."
                 then format_of_string "%s"
                 else format_of_string "@ %s "
               in
-              Fu.Op begin
+              Fu.Op (
+                top.Optable.name,
                 (fun ff -> fprintf ff fmt top.Optable.name),
                 top.Optable.prec,
-                Fu.Infix begin
+                Fu.Infix (
                   (match assoc with
                      | Optable.Left -> Fu.Left
                      | Optable.Right -> Fu.Right
                      | Optable.Non -> Fu.Non),
                   fmt_expr cx (List.nth args 0),
                   fmt_expr cx (List.nth args 1)
-                end (* Fu.Infix *)
-              end (* Fu.Op *)
+                )
+              )
           | _ ->
               Util.eprintf ~at:op "arity mismatch";
               failwith "arity mismatch"
@@ -543,8 +564,8 @@ and pp_print_bound cx ff (v, e) = match e with
   | Some e ->
       fprintf ff "@[<h>%s \\in %a@]" v (pp_print_expr cx) e
 
-and pp_print_expr cx ff e =
-  Fu.pp_print_minimal ff (fmt_expr cx e) ;
+and pp_print_expr ?(temp=false) cx ff e =
+  Fu.pp_print_minimal ff (fmt_expr ~temp:temp cx e) ;
 
 and pp_print_defn cx ff d =
   match d.core with
@@ -602,7 +623,7 @@ and pp_print_defns cx ff = function
       pp_print_cut ff () ;
       pp_print_defns cx ff ds
 
-and pp_print_sequent cx ff sq = match Deque.null sq.context with
+and pp_print_sequent  ?(temp=false) cx ff sq = match Deque.null sq.context with
   | true ->
       pp_print_expr cx ff sq.active ;
       cx
@@ -617,7 +638,7 @@ and pp_print_sequent cx ff sq = match Deque.null sq.context with
                               | Bpragma (nm,_,_) | Recursive (nm, _) },
                       _, _, _) ->
                   fst (adj cx nm)
-              | Fact (_, _) ->
+              | Fact (_, _,_) ->
                   bump cx
             in (cx, ch :: chs)
         end (cx, []) sq.context in
@@ -625,13 +646,17 @@ and pp_print_sequent cx ff sq = match Deque.null sq.context with
       if List.length chs > 0 then begin
         fprintf ff "@[<v0>ASSUME @[<v0>" ;
         pp_print_delimited begin
-          fun ff (cx, h) -> ignore (pp_print_hyp cx ff h)
+          fun ff (cx, h) -> ignore (pp_print_hyp ~temp:temp cx ff h)
         end ff chs ;
-        fprintf ff "@]@\nPROVE  %a@]" (pp_print_expr cx) sq.active
-      end else pp_print_expr cx ff sq.active ;
+        fprintf ff "@]@\nPROVE  %a@]" (pp_print_expr ~temp:temp cx) sq.active
+      end else pp_print_expr ~temp:temp cx ff sq.active ;
       cx
 
-and pp_print_hyp cx ff h =
+and pp_print_time bg ff tm = match (bg,tm) with
+  | (true,Now) -> fprintf ff "(* %s *)" "non-[]"
+  | _ -> fprintf ff ""
+
+and pp_print_hyp ?(temp=false) cx ff h =
   if Params.debugging "hidden" then begin
     if is_hidden h then fprintf ff "(* hidden *)@\n"
   end ;
@@ -650,7 +675,7 @@ and pp_print_hyp cx ff h =
         (match b with
            | Unbounded
            | Bounded (_, Hidden) -> ()
-           | Bounded (b, _) -> fprintf ff " \\in %a" (pp_print_expr cx) b) ;
+           | Bounded (b, _) -> fprintf ff " \\in %a" (pp_print_expr ~temp:temp cx) b) ;
         ncx
     | Flex nm ->
         let (ncx, nm) = adj cx nm in
@@ -661,14 +686,16 @@ and pp_print_hyp cx ff h =
           fprintf ff begin
             match wd with
               | Builtin -> format_of_string "(* builtin *)@\n"
-              | Proof -> format_of_string "(* from proof *)@\n"
+              | Proof _ -> format_of_string "(* from proof *)@\n"
               | _ -> format_of_string ""
           end
         end ;
         pp_print_defn cx ff d
-    | Fact (e, us) ->
+    | Fact (e, us, tm) ->
         let ncx = bump cx in
-        fprintf ff "@[<h>%a@]" (pp_print_expr cx) e ;
+        fprintf ff "@[<h>%a %a@]" (pp_print_expr ~temp:temp cx) e (pp_print_time
+        temp) tm;
+
         ncx
 
 let string_of_expr cx e =

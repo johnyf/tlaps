@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32098 $";;
+Revision.f "$Rev: 33430 $";;
 
 open Property
 open Util.Coll
@@ -41,29 +41,33 @@ let file_search fh =
   else
     if Sys.file_exists fh.core then Some fh else None
 
-let really_parse_file fn = match file_search fn with
+let really_parse_file fn =
+  match file_search fn with
   | None ->
-      Util.eprintf ~at:fn
-        "Could not find file %S in the search path." fn.core ;
-      Errors.set fn (Printf.sprintf "Could not find file %S in the search path." fn.core);
+      Util.eprintf ~at:fn "Could not find file %S in the search path." fn.core;
       failwith "Module.Parser.parse_file"
   | Some fn ->
-      let expname = Filename.chop_suffix (Filename.basename fn.core) ".tla" in
       let (flex, _) = Alexer.lex fn.core in
-      let htest =
-        (punct "----" >*> kwd "MODULE" >*> anyname <<< punct "----"
-         <?> (fun nm -> nm = expname)) in
-      let hparse = enabled htest >>> use parse in
+      let hparse = use parse in
       match P.run hparse ~init:Tla_parser.init ~source:flex with
-        | None ->
-            Util.eprintf ~at:fn
-              "Could not parse %S successfully." fn.core ;
-            Errors.set fn (Printf.sprintf  "Could not parse %S successfully." fn.core);
-            failwith "Module.Parser.parse_file"
-        | Some mule ->
-            if !Params.verbose then
-              Util.printf "(* module %S parsed from %S *)"
-                mule.core.name.core fn.core ;
+      | None ->
+          Util.eprintf ~at:fn "Could not parse %S successfully." fn.core;
+          failwith "Module.Parser.parse_file"
+      | Some mule ->
+          if !Params.verbose then begin
+            Util.printf "(* module %S parsed from %S *)"
+                        mule.core.name.core fn.core;
+          end;
+          let rawname =
+            Filename.chop_suffix (Filename.basename fn.core) ".tla"
+          in
+          if mule.core.name.core <> rawname then begin
+            Errors.err  ~at:mule "Warning: module name %S does not match \
+                                  file name %S."
+                        mule.core.name.core (Filename.basename fn.core);
+            let newname = { mule.core.name with core = rawname } in
+            { mule with core = { mule.core with name = newname } }
+          end else
             mule
 
 let validate mn inch =

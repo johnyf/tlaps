@@ -49,7 +49,7 @@ module type Minimal_sig = sig
   module Prec : Pars.Intf.Prec  (* The functor's argument: precedences *)
 
   (** Associativity *)
-  type assoc = Left | Right | Non
+  type assoc = Left | Non | Right
 
   (** Operators are an abstract representation of the operator
       component of a minimally parenthesized expression *)
@@ -65,7 +65,7 @@ module type Minimal_sig = sig
   and exp =
     | Atm of fmt
     | Big of fmt
-    | Op of fmt * Prec.prec * op
+    | Op of string * fmt * Prec.prec * op
 
   and fmt = formatter -> unit
 

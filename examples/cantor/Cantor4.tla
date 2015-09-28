@@ -7,7 +7,6 @@ THEOREM cantor ==
      \E A \in SUBSET S :
        \A x \in S :
          f [x] # A
-<1>. USE DEF cantor
 <1>. TAKE S
 <1>. TAKE f \in [S -> SUBSET S]
 <1>. DEFINE T == {z \in S : z \notin f[z]}

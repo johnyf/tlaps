@@ -1,12 +1,10 @@
 (*
  * toolbox.ml --- toolbox interaction
  *
- * Author: Denis Cousineau <denis(at)cousineau.eu>
- *
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32215 $";;
+Revision.f "$Rev: 34565 $";;
 
 open Ext
 open Proof.T
@@ -24,8 +22,8 @@ let reason_to_string r =
   | Cantwork s -> s
 ;;
 
-let toolbox_print ob status prover meth timeout already print_ob reason
-                  warnings time_used =
+let toolbox_print ob ?(temp=false) status prover meth timeout already print_ob
+                  reason warnings time_used =
   if !Params.toolbox then begin
     let obl =
       match ob.kind with
@@ -39,7 +37,7 @@ let toolbox_print ob status prover meth timeout already print_ob reason
           end;
           Format.fprintf ff "@[<b0>";
           ignore (Expr.Fmt.pp_print_sequent (Deque.empty, Ctx.dot) ff
-                                            ob.obl.core);
+                                            ~temp:temp ob.obl.core);
           Format.fprintf ff "@]@.";
           Some (warnings ^ Buffer.contents buf)
       | _ -> None
@@ -76,19 +74,22 @@ let toolbox_print ob status prover meth timeout already print_ob reason
 ;;
 
 let print_res_aux ob st fp do_print warns time_used =
-  let status, prover, meth, timeout, print_ob, reason =
+  let status, prover, meth, timeout, print_ob, reason, temp =
     match st with
-    | Triv -> "trivial", Some "tlapm", None, 0., !Params.printallobs, None
+    | Triv ->
+        "trivial", Some "tlapm", None, 0., !Params.printallobs, None, false
     | NTriv (r, m) ->
         let timeout = Method.timeout m in
+        let temp = Method.is_temporal m in
         let p, s = prover_meth_of_tac m in
         begin match r with
-        | RSucc -> "proved", p, s, timeout, !Params.printallobs, None
-        | RFail r -> "failed", p, s, timeout, do_print, r
-        | RInt -> "interrupted", p, s, timeout, do_print, None
+        | RSucc -> "proved", p, s, timeout, !Params.printallobs, None, temp
+        | RFail r -> "failed", p, s, timeout, do_print, r, temp
+        | RInt -> "interrupted", p, s, timeout, do_print, None, temp
         end
   in
-  toolbox_print ob status prover meth timeout fp print_ob reason warns time_used
+  toolbox_print ob ~temp status prover meth timeout fp print_ob reason warns
+                time_used
 ;;
 
 let print_new_res ob st warns time_used =
@@ -147,4 +148,54 @@ let print_message_url msg url =
 
 let print_ob_number n =
   if !Params.toolbox then Toolbox_msg.print_obligationsnumber n;
+;;
+
+(* --------------- *)
+
+(* Functions to deal with toolbox commands ("stop" and "kill"). *)
+
+let stopped = ref false;;
+(* True iff the STOP command was found in stdin. *)
+
+let killed = ref [];;
+(* List of task ids found as argument of KILL command in stdin. *)
+
+let got_eof = ref false;;
+(* True iff an end-of-file was read on stdin. In that case, no further
+   input will be read. *)
+
+let line_buf = System.make_line_buffer Unix.stdin;;
+
+(* Read standard input and update the [stopped] and [killed] variables. *)
+let read_stdin () =
+  if !Params.toolbox && not !got_eof then begin
+    match Unix.select [Unix.stdin] [] [] 0.0 with
+    | ([], _, _) -> ()
+    | _ ->
+       let cmds = System.read_toolbox_commands line_buf in
+       let f cmd =
+         match cmd with
+         | System.Eof -> got_eof := true;
+         | System.Killall -> stopped := true;
+         | System.Kill id -> killed := id :: !killed;
+       in
+       List.iter f cmds
+  end
+;;
+
+(* Get any pending commands from the toolbox and return true iff the toolbox
+   sent "stop" at any point in the past. *)
+let is_stopped () =
+  read_stdin ();
+  !stopped
+;;
+
+(* Get any pending commands from the toolbox and return the list of new (since
+   the last call to get_kills) task ids for which the toolbox sent the
+   "kill <id>" command. *)
+let get_kills () =
+  read_stdin ();
+  let result = !killed in
+  killed := [];
+  result
 ;;

@@ -4,20 +4,25 @@
 open Expr.T
 
 module SSet : Set.S with type elt = string ;;
+module SMap : Map.S with type key = string ;;
 
 module StringList : sig
-    type t = string list
-    val compare : t -> t -> int
+  type t = string list
+  val compare : t -> t -> int
 end ;;
 
 module SSMap : Map.S with type key = StringList.t ;;
 
 module Int : sig
-    type t = int
-    val compare : t -> t -> int
+  type t = int
+  val compare : t -> t -> int
 end ;;
 
 module ISet : Set.S with type elt = Int.t ;;
+
+val reset : unit -> unit;;
+
+(****************************************************************************)
 
 val ( |> ) : 'a -> ('a -> 'b) -> 'b ;;
 val ( |>> ) : 'a * 'b -> ('a -> 'c) -> 'c * 'b ;;
@@ -26,9 +31,20 @@ val kk : unit -> 'a -> 'a ;;
 val tap : ('a -> unit) -> 'a -> 'a ;;
 val pairself : ('a -> 'b) -> ('a * 'a) -> ('b * 'b) ;;
 
+(****************************************************************************)
+
+val verbosity : int ref
+
+(* val ifprint : int -> ('a, unit, string, unit) format4 -> 'a *)
+val ifprint : int -> ('a, Format.formatter, unit, unit) format4 -> 'a
+
 val print_prop : unit -> Format.formatter -> Expr.T.expr -> unit ;;
 
+val pps_ex : (hyp list * expr) -> string
+
 (* val printscx : hyp list -> unit ;; *)
+
+(****************************************************************************)
 
 (* exception Unification_failed of string ;;
 exception Unsupported_type of string ;;
@@ -60,6 +76,8 @@ val is_conc :      'a Property.wrapped -> bool ;;
 val isFld :       unit Property.pfuncs ;;
 val is_Fld :      'a Property.wrapped -> bool ;;
 
+val check_prefix : string -> string -> bool;;
+
 (* val is_bounded_var : string -> bool ;; *)
 val is_nonbasic_var : string -> bool ;;
 val boundvar : unit Property.pfuncs ;;
@@ -72,9 +90,10 @@ val add_bs_ctx : bound list -> hyp list -> hyp list ;;
 
 val n_to_list : int -> int list ;;
 (* val concat0 : string -> 'a list -> string ;; *)
-val concat1 : ('a -> string, unit, string) format -> 'a list -> string ;;
-val concat2 : ('a -> string, unit, string) format -> 'a list -> string ;;
-val remove_repeated : 'a list -> 'a list ;;
+(* val concat1 : ('a -> string, unit, string) format -> 'a list -> string ;; *)
+(* val concat2 : ('a -> string, unit, string) format -> 'a list -> string ;; *)
+val remove_repeated : 'a list -> 'a list 
+val remove_repeated_ex : expr list -> expr list
 
 val ctr : int ref ;;
 val unique_id : unit -> int ;;
@@ -97,7 +116,9 @@ val split_domain :
 val deconj : expr -> expr list;;
 val deimpl : expr -> expr list * expr ;;
 val unroll_seq : sequent -> expr ;;
-val opaque : ?strong:bool -> hyp list -> expr -> expr ;;
+
+val map_exp : (hyp list -> expr -> expr) -> hyp list -> expr -> expr
+val opaque : ?strong:bool -> ?min:int -> hyp list -> expr -> expr ;;
 
 val proc_assumptions :
   (hyp list -> expr -> (hyp * hyp list) list -> 'a) ->
@@ -123,13 +144,13 @@ val tla_op_set : SSet.t ref ;;
 val add_tla_op : SSet.elt -> unit ;;
 (* val returns_bool : hyp list -> expr -> bool ;; *)
 
-val nonbasic_ops : (hyp list * expr) Typesystem.SMap.t ref ;;
+val nonbasic_ops : (hyp list * expr) SMap.t ref ;;
 val nonbasic_prefix : string ;;
 (* val add_nonbasic_op : string -> hyp list -> expr -> unit ;;
 val remove_nonbasic_op : string -> unit ;;
 val find_nonbasic_op : hyp list -> expr -> string ;; *)
 
-val chooses : (hyp list * expr) Typesystem.SMap.t ref ;;
+val chooses : (hyp list * expr) SMap.t ref ;;
 val add_choose : string -> hyp list -> expr -> unit ;;
 
 type provermode = Smtlib | CVC3 | Z3 | Yices | Spass | Fof ;;
@@ -146,9 +167,9 @@ val perms : 'a list -> ('a * 'a) list ;;
 val is_term : expr -> bool ;;
 val is_domain : expr -> bool ;;
 
-val tuple_id : Typesystem.TLAtype.t list -> string ;;
+(* val tuple_id : Typesystem.TLAtype.t list -> string ;;
 val tuples : Typesystem.TLAtype.t list list ref ;;
-val add_tuple : Typesystem.TLAtype.t list -> unit ;;
+val add_tuple : Typesystem.TLAtype.t list -> unit ;; *)
 
 (* val flatten_conj : expr -> expr ;;
 val flatten_disj : expr -> expr ;;
@@ -160,7 +181,103 @@ val renameb : hyp list -> expr -> expr ;;
 
 (* val flag_nat_cond : unit Property.pfuncs ;; *)
 (* val apply_nat_cond : expr -> bool ;; *)
-val newvars : (hyp list * expr) Typesystem.SMap.t ref ;;
+val newvars : (hyp list * expr) SMap.t ref ;;
 val mk_newvar_id : hyp list -> expr -> string ;;
 val unspec : hyp list -> expr -> expr ;;
 val insert_intdiv_cond : hyp list -> expr -> expr ;;
+
+
+val subtract : 'a list -> 'a -> 'a list;;
+val list_minus : 'a list -> 'a list -> 'a list;;
+
+val flatten_conj : expr -> expr;;
+val flatten_disj : expr -> expr;;
+
+
+
+
+
+(* val boolify : expr -> expr ;;
+
+module Types : sig
+  (* type basetype = (* Any | *) Int2 | Str2 | Bool2 *)
+  type t = 
+    (* | Base of basetype *)
+    | (* Top | *) (* Any | *) Int2 | Str2 | Bool2
+    | TyVar of string                                     (** Variable type *)
+    | Set of t                                            (** Power set type *)
+    | Func of string * t * t                              (** Dependent function type *)
+    | Ref of string * t * hyp list * expr                 (** Refinement of basic types *)
+    | TySubst of (string * hyp list * expr * t) list * t  (** Explicit substitution *)
+    | Emptyset
+    | EmptyVar of string 
+    | TyUnion of t list
+    | TyInter of t list
+    | TySetminus of t * t 
+    (* | IntX2 of t * t *)
+  val mk_ref : t -> t
+  val is_safe : t -> bool
+  val is_int : t -> bool
+  val eq : t -> t -> bool
+  (* val eq_uptoref : t -> t -> bool *)
+  val pp : Format.formatter -> t -> unit
+  val union : t list -> t
+  val fv : t -> string list
+  val subst : string -> t -> t -> t
+  val simplify : t -> t
+  (* val typbot : expr -> t *)
+  val add_env : string * t -> t -> t
+  val add_x_ctx : string -> t -> hyp list -> hyp list
+  val expr_fv : t -> string list
+  val occurs : string -> t -> bool
+end;;
+
+module JCtx : sig
+  type t = Types.t SMap.t
+  val empty : t
+  val ( $$ ) : t -> (string * Types.t) -> t
+  val addnew : t -> string -> t
+  val pp : Format.formatter -> t -> unit
+  val eq : t -> t -> bool
+  val subst : string -> Types.t -> t -> t
+  (* val merge : t list -> t *)
+  val tyvars : t -> string list
+  val finds : t -> string list -> string list
+end;;
+
+module TC : sig
+  type t = 
+    | CTrue 
+    | CFalse 
+    | CEq of Types.t * Types.t
+    | CIsEq of Types.t * Types.t
+    | CSubtype of JCtx.t * Types.t * Types.t
+    | CConj of t list
+    | CExists of string list * t
+    (* | CIsSafe of Types.t  *)
+    (* | CIsInt of Types.t      *)
+    | CEqWeak of JCtx.t * Types.t * Types.t
+    | CBoolify of Types.t 
+  val pp : Format.formatter -> t -> unit
+  val eq : t -> t -> bool
+  val simplify : JCtx.t -> t -> (JCtx.t * t)
+  val solve_residual_iseq : JCtx.t -> t -> t
+  val subst : string -> Types.t -> t -> t
+  val vsubst : string -> string -> t -> t
+  val fv : t -> string list
+  val fix : int -> (t -> t) -> t -> t
+  (* val fix_env : int -> (JCtx.t -> t -> JCtx.t * t) -> JCtx.t -> t -> (JCtx.t * t) *)
+  val print_env_constraint : JCtx.t -> t -> unit
+  val simp1 : JCtx.t -> t -> (JCtx.t * t)
+  val mk_cs : t list -> t
+  val mk_ex : string list * t list -> t
+end;;
+
+type judg_imp = JCtx.t * hyp list * expr * hyp list * expr
+type substitutions = (string * Types.t) list
+
+(* val cg_prop : JCtx.t -> hyp list -> expr -> TC.t;; *)
+val typesystem_cg : hyp list -> expr -> (JCtx.t * TC.t)
+val solve_csub : (JCtx.t * TC.t) -> (JCtx.t * TC.t * substitutions * judg_imp list)
+(* val pp_subs : Format.formatter -> substitutions -> unit *)
+(* val pp_vcs : Format.formatter -> judg_imp list -> unit *) *)

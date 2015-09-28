@@ -87,6 +87,17 @@ Spass == TRUE (*{ by (prover: "spass") }*)
 SpassT(X) == TRUE (*{ by (prover:"spass"; timeout:@) }*)
 
 (**************************************************************************)
+(* Backend pragma: The PTL propositional linear time temporal logic       *)
+(* prover.  It currently is the LS4 backend.                              *)
+(*                                                                        *)
+(* This method translates the negetation of the proof obligation to       *)
+(* Seperated Normal Form (TRP++ format) and checks for unsatisfiability   *)
+(**************************************************************************)
+
+LS4 == TRUE (*{ by (prover: "ls4") }*)
+PTL == TRUE (*{ by (prover: "ls4") }*)
+
+(**************************************************************************)
 (* Backend pragma: Zenon with different timeouts (default is 10 seconds)  *)
 (*                                                                        *)
 (**************************************************************************)
@@ -102,7 +113,7 @@ ZenonT(X) == TRUE (*{ by (prover:"zenon"; timeout:@) }*)
 Isa == TRUE (*{ by (prover:"isabelle") }*)
 IsaT(X) ==  TRUE (*{ by (prover:"isabelle"; timeout:@) }*)
 IsaM(X) ==  TRUE (*{ by (prover:"isabelle"; tactic:@) }*)
-IsaTM(X,Y) ==  TRUE (*{ by (prover:"isabelle"; timeout:@; tactic:@) }*)
+IsaMT(X,Y) ==  TRUE (*{ by (prover:"isabelle"; tactic:@; timeout:@) }*)
 
 (***************************************************************************)
 (* The following theorem expresses the (useful implication of the) law of  *)
@@ -123,8 +134,8 @@ THEOREM SetExtensionality == \A S,T : (\A x : x \in S <=> x \in T) => S = T
 OBVIOUS
 
 (***************************************************************************)
-(* The following axiom is needed to deduce NotInSetS \notin SetS from the  *)
-(* definition                                                              *)
+(* The following theorem is needed to deduce NotInSetS \notin SetS from    *)
+(* the definition                                                          *)
 (*                                                                         *)
 (*   NotInSetS == CHOOSE v : v \notin SetS                                 *)
 (***************************************************************************)

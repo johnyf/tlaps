@@ -40,7 +40,7 @@ utest:
 test:
 	: ----------------------- unit tests ----------------------
 	${MAKE} -C src clean >/dev/null 2>&1
-	${MAKE} -C src utest >/dev/null 2>&1
+	${MAKE} -C src utest
 	RESOURCE_FOLDER=test/resources/ src/tlapm.byte --version
 	${MAKE} -C src clean >/dev/null 2>&1
 	: --------------------fast regression tests -------------------
@@ -52,7 +52,7 @@ test:
 jtest:
 	: ----------------------- unit tests ----------------------
 	${MAKE} -C src clean >/dev/null 2>&1
-	${MAKE} -C src utest >/dev/null 2>&1
+	${MAKE} -C src utest
 	Jenkins=1 RESOURCE_FOLDER=test/resources/ src/tlapm.byte --version
 	${MAKE} -C src clean >/dev/null 2>&1
 	: -------------------- soundness tests -------------------

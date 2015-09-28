@@ -2,7 +2,7 @@
  * Copyright (C) 2011  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 28687 $";;
+Revision.f "$Rev: 32860 $";;
 
 module T = M_t;;
 module Fmt = M_fmt;;
@@ -13,3 +13,4 @@ module Flatten = M_flatten;;
 module Dep = M_dep;;
 module Parser = M_parser;;
 module Save = M_save;;
+module Globalness = M_globalness;;

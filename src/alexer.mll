@@ -21,8 +21,11 @@
 
   let tab_complain lexbuf =
     let e = E.error (Loc.locus_of_position lexbuf.lex_start_p) in
-    let e = E.err_set_unexpected ("tab character. TLAPS does not handle TLA+ source files that contain tabs.") e in
-      raise (Error e)
+    let e =
+      E.err_set_unexpected "TAB character. TLAPS does not handle TAB \
+                            characters in source files." e
+    in
+    raise (Error e)
 
 }
 
@@ -37,8 +40,8 @@ let namechar = (letter | numeral | '_')
 let name     = namechar* letter namechar*
 
 rule modfile = parse
-  | "----" '-'*
-      { [ PUNCT "----" ] }
+  | "----" '-'* ' '* "MODULE"
+      { [ PUNCT "----"; KWD "MODULE" ] }
   | newline
       { eol lexbuf ; modfile lexbuf }
   | _ { modfile lexbuf }
@@ -73,12 +76,12 @@ and token = parse
   | "====" '='*
       { [ PUNCT "====" ] }
 
-  | "<*>" ((letter | numeral)* as lab) ('.'* as dots)
-      { [ ST ( `Star, lab, String.length dots) ] (* :: dtoks dots *) }
-  | "<+>" ((letter | numeral)* as lab) ('.'* as dots)
-      { [ ST ( `Plus, lab, String.length dots) ] (* :: dtoks dots *) }
-  | '<' (numeral+ as num) '>' ((letter | numeral)* as lab) ('.'* as dots)
-      { [ ST (`Num (int_of_string num), lab, String.length dots) ] (* :: dtoks dots *) }
+  | "<*>" ('.'* as dots)
+      { [ ST ( `Star, "", String.length dots) ] }
+  | "<+>" ('.'* as dots)
+      { [ ST ( `Plus, "", String.length dots) ] }
+  | '<' (numeral+ as num) '>' (namechar* as lab) ('.'* as dots)
+      { [ ST (`Num (int_of_string num), lab, String.length dots) ] }
 
   | (","|"."|"_"|"("|")"|"["|"]"|"{"|"}"|"<<"|">>"|"]_"|">>_"|"=="|"!"
     |"@"|":"|"::"|";"|"->"|"<-"|"|->"|"\\A"|"\\AA"|"\\E"|"\\EE"|'_' as p)
@@ -120,7 +123,8 @@ and token = parse
     |"\\/"|"\\lor"|"#"|"/="|"-|"|"::="|":="|"<"|"="|"=|"|">"|"\\approx"
     |"\\asymp"|"\\cong"|"\\doteq"|"\\gg"|"\\notin"|"\\ll"|"\\prec"|"\\preceq"
     |"\\propto"|"\\sim"|"\\simeq"|"\\sqsubset"|"\\sqsubseteq"|"\\sqsupset"
-    |"\\sqsupseteq"|"\\subset"|"\\subseteq"|"\\succ"|"\\succeq"|"\\supset"|"\\supseteq"
+    |"\\sqsupseteq"|"\\subset"|"\\subseteq"|"\\succ"|"\\succeq"|"\\supset"
+    |"\\supseteq"
     |"|-"|"|="|"\\cdot"|"@@"|":>"|"<:"|"\\"|"\\in"
     |".."|"..."|"!!"|"##"|"$"|"$$"|"??"|"\\sqcap"
     |"\\sqcup"|"\\uplus"|"\\wr"|"+"|"++"|"%"|"%%"|"|"
@@ -141,13 +145,15 @@ and token = parse
     |"EXCEPT"|"EXTENDS"|"IF"|"IN"|"INSTANCE"|"LET"|"HAVE"|"TRUE"|"FALSE"
     |"HIDE"|"PROOF"|"PROVE"|"STATE"|"OMITTED"|"LOCAL"|"MODULE"|"OTHER"
     |"THEN"|"THEOREM"|"UNCHANGED"|"QED"|"RECURSIVE"|"WITNESS"|"STRING"
-    |"SUFFICES"|"ACTION"|"LEMMA"|"COROLLARY"|"VARIABLE"|"VARIABLES"|"WITH"|"TAKE"
+    |"SUFFICES"|"ACTION"|"LEMMA"|"COROLLARY"|"VARIABLE"|"VARIABLES"|"WITH"
+    |"TAKE"
     |"USE"|"PICK"|"NEW"|"TEMPORAL"|"PROPOSITION"|"ONLY" as kwd)
       { [ KWD kwd ] }
 
   | (name as nm)
       { [ ID nm ] }
-      (* On the same match, the earlier rule fires, so WF_foo is always lexed as [WF_ ; foo] *)
+      (* On the same match, the earlier rule fires, so WF_foo is always lexed
+         as [WF_ ; foo] *)
 
   (* end of stream *)
   | eof
@@ -272,7 +278,6 @@ and comment depth = parse
       inited := true ;
       match !buffer with
         | t :: ts ->
-            (* Printf.fprintf stderr "[debug] plex sent %s.\n%!" (rep t.mark_data) ; *)
             buffer := ts ;
             Some t
         | _ -> None

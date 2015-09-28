@@ -2,20 +2,22 @@
  * Copyright (C) 2011  INRIA and Microsoft Corporation
  *)
 
-(* backend/yices.ml *)
-module SMap : Map.S with type key = string;;
-type tlatype =
-    | Bot
-    | Bool
-    | Int
-    | Real
-    | Str
-    | P of tlatype
-    | Fcn of tlatype * tlatype
-    | Rec of tlatype SMap.t
-    | Tup of tlatype list
-;;
+(* open Smtcommons *)
+
 module SSet : Set.S with type elt = string;;
+module SMap : Map.S with type key = string;;
+
+type tlatype =
+  | Bot
+  | Bool
+  | Int
+  | Real
+  | Str
+  | P of tlatype
+  | Fcn of tlatype * tlatype
+  | Rec of tlatype SMap.t
+  | Tup of tlatype list
+;;
 
 module TLAtypeMap : Map.S with type key = tlatype ;;
 class types : object
@@ -62,14 +64,13 @@ val typbot : 'a Property.wrapped -> TLAtype.t ;;
 val typpbot : 'a Property.wrapped -> TLAtype.t ;;
 val typ_to_str : 'a Property.wrapped -> string ;;
 
-
 (* A persistent union-find data structure.
 
    The datatype [t] maintains a partition of the set [0,1,...,n-1],
    where [n] is the value passed to [create]. *)
 
-type t
+(* type t
 
 val create : int -> t
 val find : t -> int -> int
-val union : t -> int -> int -> t
+val union : t -> int -> int -> t *)

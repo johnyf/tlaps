@@ -26,5 +26,5 @@ THEOREM cantor ==
   <2>3. QED
     <3>1. WITNESS T \in SUBSET S
     <3>2. QED BY <2>2
-<1>2. QED BY <1>1 DEF cantor
+<1>2. QED BY <1>1
 ===============================================

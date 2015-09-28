@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 28687 $";;
+Revision.f "$Rev: 32860 $";;
 
 module Option = struct
   let iter : ('a -> unit) -> 'a option -> unit =
@@ -168,6 +168,10 @@ module Std = struct
 
 end
 
+  let string_contains s1 s2 =
+    let re = Str.regexp_string s2 in
+    try ignore (Str.search_forward re s1 0); true
+    with Not_found -> false
 
 let is_prefix pref txt =
   String.length txt >= String.length pref

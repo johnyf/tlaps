@@ -78,7 +78,7 @@ THEOREM IntervalCardinality ==
   PROVE  /\ IsFiniteSet(a..b)
          /\ Cardinality(a..b) = IF a > b THEN 0 ELSE b-a+1
 <1>1. CASE a > b
-  BY <1>1, CardinalityZero, SetExtensionality, SMT
+  BY <1>1, a..b = {}, CardinalityZero
 <1>2. CASE a <= b
   <2> DEFINE n == b - a + 1
   <2> DEFINE F == [x \in 1..n |-> x + a - 1]

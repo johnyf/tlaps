@@ -187,12 +187,6 @@ LEMMA InductiveInvariance ==
 <1>5. QED
   BY <1>1, <1>2, <1>4 DEF Next
 
-(***************************************************************************)
-(* TLAPS does not yet handle temporal logic reasoning.  Therefore, proofs  *)
-(* of temporal steps are omitted.  However, we indicate in comments what   *)
-(* we expect the proofs to look like when TLAPS does prove temporal        *)
-(* formulas.                                                               *)
-(***************************************************************************)
 THEOREM Invariance == Spec => []Inv 
 <1>1.  Init => Inv
   \* We usually have to use SimpleArithmetic to prove facts about numbers,
@@ -200,19 +194,7 @@ THEOREM Invariance == Spec => []Inv
   BY EmptySetCardinality, 0 \leq 1 DEF Init, Inv, TypeOK
 
 <1>2.  QED
-  <2>1. Inv /\ [Next]_vars => []Inv
-\*    BY InductiveInvariance, RuleINV1 
-    PROOF OMITTED
-    (***********************************************************************)
-    (* RuleInv1 is defined in the TLAPS module by                          *)
-    (*                                                                     *)
-    (*    THEOREM RuleINV1 == ASSUME STATE I, STATE F,  ACTION N,          *)
-    (*                               I /\ [N]_F => I'                      *)
-    (*                        PROVE  I /\ [][N]_F => []I                   *)
-    (***********************************************************************)
-  <2>2. QED
-\*    BY <1>1, <2>1
-    PROOF OMITTED
+ BY PTL, <1>1, InductiveInvariance DEF Spec
 
 -----------------------------------------------------------------------------
 (***************************************************************************)
@@ -333,5 +315,7 @@ THEOREM LiveSpecEquals ==
   PROOF OMITTED
 =============================================================================
 \* Modification History
+\* Last modified Mon Aug 18 15:00:45 CEST 2014 by tomer
+\* Last modified Mon Aug 18 14:58:57 CEST 2014 by tomer
 \* Last modified Tue Feb 14 13:35:49 PST 2012 by lamport
 \* Last modified Mon Feb 07 14:46:59 PST 2011 by lamport

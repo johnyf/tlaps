@@ -6,7 +6,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 30405 $";;
+Revision.f "$Rev: 34605 $";;
 
 open Ext
 open Property
@@ -27,7 +27,7 @@ let tuple_form sq =
     | Some (h, cx) -> begin
         let shf = shift (nhyps - Deque.size !facs + 1) in
         match h.core with
-          | Fact (f, _) ->
+          | Fact (f, _, _) ->
               facs := Deque.snoc !facs (app_expr shf f) ;
               spin cx
           | Fresh (_, _, _, Bounded (ran, _)) ->
@@ -54,20 +54,21 @@ let citable st = match st.core with
   | _ -> true
 
 
+let push_name sn (stack, cx) = ((string_of_stepno sn) :: stack, cx);;
 
 class anon = object (self : 'self)
   inherit [string list] P_visit.map as super
   inherit Expr.Anon.anon
 
   method proof scx prf = match prf.core with
-    | Steps _ ->
-        (* make all QED steps unnamed *)
-       let sn = match get prf Props.step with
-          | Unnamed _ as sn -> sn
-          | Named (n, _, _) -> Unnamed (n, Std.unique ())
-        in
-        let prf = assign prf Props.step sn in
-        super#proof scx prf
+    | Steps (inits, qed) ->
+        let (scx, inits) = self#steps scx inits in
+        let sn = get prf Props.step in
+        (* add QED step name to warn list, because QED steps never have
+           assumptions *)
+        let scx = push_name sn scx in
+        let qed_prf = self#proof scx (get_qed_proof qed) in
+        Steps (inits, {qed with core = Qed qed_prf}) @@ prf
     | _ ->
         super#proof scx prf
 
@@ -80,9 +81,8 @@ class anon = object (self : 'self)
     let st = assign st Props.step sn in
     let adj_step scx df =
       Expr.Visit.adj scx (Defn (Operator (string_of_stepno sn @@ st, df) @@ st,
-                                Proof, Visible, Local) @@ st)
+                                Proof Always, Visible, Local) @@ st)
     in
-    let push_name (stack, cx) = ((string_of_stepno sn) :: stack, cx) in
     match st.core with
       | Assert (sq, prf) ->
           let (_, sq) = self#sequent scx sq in
@@ -97,7 +97,8 @@ class anon = object (self : 'self)
             (* hidden assertion that the tuple is true *)
             let scx = bump scx 1 in
             (* Add name to warn list if assumptions are empty *)
-            let scx = if Deque.size sq.context = 0 then push_name scx else scx
+            let scx =
+              if Deque.size sq.context = 0 then push_name sn scx else scx
             in
             self#proof scx prf
           in
@@ -192,7 +193,7 @@ class anon = object (self : 'self)
             let ex = Quant (Exists, bs, e) @@ st in
             let scx = adj_step scx ex in
             let scx = bump scx 1 in
-            let scx = push_name scx in
+            let scx = push_name sn scx in
             self#proof scx prf
           in
           let st = Pick (bs, e, prf) @@ st in

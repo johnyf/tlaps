@@ -11,7 +11,7 @@
  *
  * END dflags *)
 
-Revision.f "$Rev: 32215 $";;
+Revision.f "$Rev: 33173 $";;
 
 open Ext
 
@@ -41,11 +41,12 @@ let rec extend_with (hx, vx) hs = match Deque.front hs with
         | Fresh (nm, _, _, _)
         | Defn ({core = Operator (nm, _)}, _, _, _) ->
             (hx, Ctx.push vx nm.core)
-        | Fact (_, _) ->
+        | Fact (_, _, _) ->
             (hx, Ctx.bump vx)
         | _ -> failwith "Proof_fmt.extend_with"
       in
         extend_with cx hs
+
 
 let pp_print_obligation ff ob =
   ignore (pp_print_sequent (Deque.empty, Ctx.dot) ff ob.obl.core)

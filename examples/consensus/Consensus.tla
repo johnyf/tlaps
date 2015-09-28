@@ -24,6 +24,6 @@ THEOREM Invariance == Spec => []Inv
 <1>2. Inv /\ [Next]_chosen => Inv'
   BY CardinalityOne, SMT DEFS Next, Inv
 <1>3 QED 
-  PROOF OMITTED
+  PROOF BY <1>1,<1>2,PTL DEF Spec
 
 =============================================================================

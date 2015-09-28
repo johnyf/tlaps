@@ -89,6 +89,9 @@ val noprops : 'a -> 'a wrapped
 (** [nowhere] is a wrapped value with no properties. *)
 val nowhere : unit wrapped
 
+(** [aw $ bw] returns aw with all new properties in bw *)
+val ( $$ ) : 'a wrapped -> 'b wrapped -> 'a wrapped
+
 (** [x @@ w] wraps [x] with the properties of [w] *)
 val ( @@ ) : 'a -> 'b wrapped -> 'a wrapped
 
@@ -110,3 +113,6 @@ val unsafe_has     : 'a -> 'b pfuncs -> bool
 val unsafe_get     : 'a -> 'b pfuncs -> 'b
 val unsafe_query   : 'a -> 'b pfuncs -> 'b option
 val unsafe_assign  : 'a -> 'b pfuncs -> 'b -> 'a
+
+(** printer for properties *)
+val print_all_props : 'a wrapped -> unit

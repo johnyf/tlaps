@@ -17,7 +17,7 @@
  * Copyright (C) 2013  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32093 $";;
+Revision.f "$Rev: 34589 $";;
 
 open Ext
 open Format
@@ -28,90 +28,10 @@ open Expr.T
 open Proof.T
 open Expr.Subst
 
+open Symbol_commute
+open Coalesce
+
 module B = Builtin
-
-let prime e = { e with core = Apply ({ e with core = Internal B.Prime }, [e]) }
-
-let safe_prime e =
-  match e.core with
-    | Apply (op,l) ->
-        begin match op.core with
-          | Internal B.Prime ->   Errors.set e "commuting prime to the argument of a constant operator produced double priming";
-              Util.eprintf ~at:e "commuting prime to the argument of a constant operator produced double priming";
-              failwith "doubleprime"
-          | _ -> prime e
-        end
-    | _ -> prime e
-
-let prime_commute =
-  let visitor = object (self : 'self)
-    inherit [unit] Expr.Visit.map as super
-    method expr scx e = match e.core with
-      | Internal (B.Prime | B.Leadsto | B.ENABLED
-                  | B.UNCHANGED | B.Cdot | B.Actplus
-                  | B.Box _ | B.Diamond ) -> failwith
-                  "Frontend.Action.prime_commute: primed temporal expression"
-      | Opaque _ ->
-          prime e
-      | Ix n ->
-          if n > Deque.size (snd scx) then
-            Errors.bug ~at:e "Expr.Elab.prime_commute: unknown bound variable"
-          else begin
-            match Deque.nth ~backwards:true (snd scx) (n - 1) with
-              | Some {core = Fresh (name, _, Constant, _)} -> e
-              | Some {core = Fresh (name,_,_,_)} -> prime e
-              | Some {core = Flex name} -> prime e
-              | Some {core = Defn (df, _, _, _)} -> begin
-                  match df.core with
-                    | Operator (_, op) when Expr.Constness.is_const op ->
-                        e
-                    | _ ->
-                        prime e
-                end
-              | Some h ->
-                  Util.eprintf ~debug:"elab" ~at:h
-                    "@[<v2>bad_hyp == @,%t@]@."
-                    (fun ff -> ignore (Expr.Fmt.pp_print_hyp (snd scx, Ctx.dot) ff h)) ;
-                  Errors.bug ~at:h
-                    "Expr.Elab.prime_commute: invalid bound reference"
-              | _ -> Errors.bug ~at:e "Expr.Elab.prime_commute: invalid bound reference"
-          end
-      (* in case he operand is non-temporal right now we propagate the primes to both since
-       * we cannot get liebnizity information. When that information is
-       * available, we would need to deal with this case here and do possibly coalescing
-      | Apply (op, args) -> *)
-      | Lambda _ ->
-          Errors.bug ~at:e "Frontend.Action.prime_commute: encountered a naked LAMBDA"
-      | ( Sequent _ | Let _ | Tquant _ | Tsub _ | Fair _ )
-        -> prime e
-      | _ -> super#expr scx e
-  end in
-  fun scx e -> visitor#expr scx e
-
-let prime_normalize =
-  let visitor = object (self : 'self)
-    inherit [unit] Expr.Visit.map as super
-    method expr scx e = match e.core with
-      | Apply ({ core = Internal B.Prime }, [e]) ->
-          let e2 = prime_commute scx e in
-          begin
-            match e2.core with
-              | Apply ({ core = Internal B.Prime }, _) -> e2
-              | _ -> self#expr scx e2
-          end
-      | _ -> super#expr scx e
-
-  end in
-  fun scx e ->
-    let ret = try visitor#expr scx e with
-    | Failure msg ->
-        Util.eprintf ~at:e
-          "@[<v2>offending expr =@,%t@]@."
-          (fun ff -> Expr.Fmt.pp_print_expr ((snd scx), Ctx.dot) ff e) ;
-          prerr_string "Message: "; prerr_string msg;
-        failwith msg
-    in
-    ret
 
 type ctx = int Ctx.ctx
 let dot : ctx = Ctx.dot
@@ -148,10 +68,11 @@ let crypthash (cx : ctx) e =
   in
   "hash'" ^ Digest.to_hex (Digest.string s)
 
-(* TODO: we use _prime in order to name new variables but we need to use
- * a namespace mechanism for the generation of new names.
- * there is such a mechanism in the code but is not working well enough*)
-let prime_replace str = Opaque (str ^ "_prime")
+(* Note: we append "#prime" to get a variable name that is not in the
+   space of regular TLA identifers. It will be transcoded by
+   [Tla_parser.pickle] into a regular identifier without clash.
+*)
+let prime_replace str = Opaque (str ^ "#prime")
 
 let eliminate_primes =
   let visitor = object (self : 'self)
@@ -196,23 +117,128 @@ let eliminate_primes =
     ret
 
 let expand_prime_defs scx ob =
-  let ob = Tla_norm.action_normalize scx ob in
-  let ob = Tla_norm.unchanged_normalize scx ob in
+  let ob = Expr.Tla_norm.expand_action scx ob in
+  let ob = Expr.Tla_norm.expand_unchanged scx ob in
   ob
 
-let translate_primes scx ob =
-  let ob = Expr.Constness.propagate#expr scx ob in
-  let ob = prime_normalize scx ob in
-  eliminate_primes scx ob
-
 let coalesce_non_leibniz ob = ob
+
+(** Aux functions for commuting symbols **)
+
+(* all symbols must be idempotent? *)
+
+(* Prime commuter:
+  * prime should be always commutted over applications since there is an
+  * assumption that SANY will prevent applying a non-leibniz operator.
+  * prime should not commute over other structures like sequents, etc.
+  * Note1: we assume that all primed expressions must be leibniz and that
+  * this is determined by SANY!
+  * *)
+let prime_commuter =
+  let prime e = Apply (Internal Builtin.Prime @@ e, [e]) @@ e in
+  object (self)
+    inherit [unit] Expr.Visit.map as super
+(*    method expr scx e =
+      (* all constant expression cancel the modality *)
+      if (Expr.Constness.is_const e) then e
+      else match e.core with
+      (* atoms, whether definitios, variables, constants, etc, are assumed here
+       * to be non-constant and therefpre prime cannot be further commuted *)
+      | Ix n -> prime e
+      (* we cannot commute primes over this symbols *)
+      |  Opaque _ | Sequent _ | Let _ | Tquant _ | Tsub _ |
+        Fair _  -> prime e
+      (* for the rest, we just commute the prime one step down the structure of
+       * the expression *)
+      | _ -> super#expr scx e*)
+    method expr scx e = match e.core with
+         | Ix n -> begin
+             match (get_val_from_id (snd scx) n).core with
+             | Fresh (_, _, Constant, _) -> e
+             | Defn ({core = Operator (_,op)}, _, _, _) when
+             (Expr.Constness.is_const op) -> e
+             | _ -> prime e
+           end
+         |  Opaque _ | Sequent _ | Let _ | Tquant _ | Tsub _ |
+           Fair _  -> prime e
+         | _ -> super#expr scx e
+  end
+
+(* Box commuter:
+  * Box should be computed over /\ and the two foralls
+  * Box should be cancelled over constant expressions
+  * *)
+let box_commuter =
+  let box e = Apply (Internal (Builtin.Box true) @@ e, [e]) @@ e in
+  object (self)
+    inherit [unit] Expr.Visit.map as super
+    method expr scx e =
+      (* all constant expression cancel the modality *)
+      if (Expr.Constness.is_const e) then e
+      else match e.core with
+      (* Conjunctions *)
+      | Apply ({core = Internal Builtin.Conj}, _)
+      (* Universal quantifiers *)
+      | Quant (Forall, _,_)
+      | Tquant (Forall, _,_) ->
+          super#expr scx e
+      | _ -> box e
+  end
+
+(* Diamond commuter:
+  * Dia should be computed over \/ and the two exists
+  * Dia should be cancelled over constant expressions
+  * *)
+let dia_commuter =
+  let dia e = Apply (Internal Builtin.Diamond @@ e, [e]) @@ e in
+  object (self)
+    inherit [unit] Expr.Visit.map as super
+    method expr scx e =
+      (* all constant expression cancel the modality *)
+      if (Expr.Constness.is_const e) then e
+      else match e.core with
+      (* Disjunctions *)
+      | Apply ({core = Internal Builtin.Disj}, _)
+      (* Existential quantifiers *)
+      | Quant (Exists, _,_)
+      | Tquant (Exists, _,_) ->
+          super#expr scx e
+      | _ -> dia e
+  end
+
+(* general functions for commuting symbols
+ * *)
+let apply_stripper = function
+  | {core = Apply(_,[e])} -> e
+  | _ -> failwith "apply_stripper can be applied only to mondaic applications"
+
+let mymap =
+  let m = SymbolMap.empty in
+  let m = SymbolMap.add (noprops (Apply (noprops (Internal Builtin.Prime), [])))
+  (prime_commuter, apply_stripper) m in
+  let m = SymbolMap.add (noprops (Apply (noprops (Internal (Builtin.Box true)), [])))
+  (box_commuter, apply_stripper) m in
+  let m = SymbolMap.add (noprops (Apply (noprops (Internal Builtin.Diamond), [])))
+  (dia_commuter, apply_stripper) m in
+  m
+
+(* END of aux functions section *)
+
 
 let process_eob ob =
   let cx = Deque.empty in
   let scx = ((),cx) in
+  let visitor = object (self: 'self)
+    inherit Expr.Constness.const_visitor
+  end in
+  let visitor2 = object (self: 'self)
+    inherit Expr.Leibniz.leibniz_visitor
+  end in
+  let ob =  visitor#expr scx ob in
+  let ob =  visitor2#expr scx ob in
   let ob = expand_prime_defs scx ob in
-  let ob = translate_primes scx ob in
-  let ob = coalesce_non_leibniz ob in
+  let ob = symbol_commute mymap ob in
+  let ob = coalesce_modal ob in
   ob
 
 let process_obligation ob =

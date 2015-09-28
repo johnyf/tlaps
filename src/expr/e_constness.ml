@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 28687 $";;
+Revision.f "$Rev: 34599 $";;
 
 open Ext
 open Property
@@ -14,19 +14,23 @@ open E_t
 
 module Visit = E_visit;;
 
-let isconst : unit pfuncs =
+let isconst : bool pfuncs =
   Property.make ~uuid:"595aaaad-07ca-498b-8ebc-a473db6b0b27" "Expr.Constness.isconst"
 
-let is_const x = Property.has x isconst
+let has_const x = Property.has x isconst
+(*let is_const x = Property.get x isconst*)
+let is_const x = try Property.get x isconst with
+| Not_found -> false
 
-let propagate = object (self : 'self)
+
+class virtual const_visitor = object (self : 'self)
   inherit [unit] Visit.map as super
 
   method expr scx e = match e.core with
     | Lambda (vss, le) ->
         let hs = List.map begin
           fun (v, shp) ->
-            assign (Fresh (v, shp, Constant, Unbounded) @@ v) isconst ()
+            assign (Fresh (v, shp, Constant, Unbounded) @@ v) isconst true
         end vss in
         let scx = Visit.adjs scx hs in
         let le = self#expr scx le in
@@ -35,9 +39,7 @@ let propagate = object (self : 'self)
         (*   "const (%a) <-- %b@." *)
         (*   (Fmt.pp_print_expr (snd scx, Ctx.dot)) e *)
         (*   (Property.has le isconst) ; *)
-        if Property.has le isconst
-        then assign e isconst ()
-        else e
+        assign e isconst (is_const le)
     | Sequent sq ->
         let (_, sq) = super#sequent scx sq in
         let e = Sequent sq @@ e in
@@ -47,7 +49,7 @@ let propagate = object (self : 'self)
               let hgood = match h.core with
                 | Fresh (_, _, Constant, _) -> true
                 | ( Defn ({core = Operator (_, e)}, _, _, _)
-                  | Fact (e, _)
+                  | Fact (e, _, _)
                   ) ->
                     is_const e
                 | _ -> false
@@ -55,13 +57,7 @@ let propagate = object (self : 'self)
               hgood && sq_const cx
             end
         in
-        (* Util.eprintf e *)
-        (*   "const (%a) <-- %b@." *)
-        (*   (Fmt.pp_print_expr (snd scx, Ctx.dot)) e *)
-        (*   (sq_const sq.context) ; *)
-        if sq_const sq.context then
-          assign e isconst ()
-        else e
+        assign e isconst (sq_const sq.context)
     | _ ->
         let e = super#expr scx e in
         let cx = snd scx in
@@ -70,7 +66,7 @@ let propagate = object (self : 'self)
               match Deque.nth ~backwards:true cx (n - 1) with
                 | Some h -> begin match h.core with
                     | Defn ({core = Operator (_, op)}, _, _, _) ->
-                        Property.has op isconst
+                        is_const op
                     | Fresh (_, _, Constant, _) ->
                         true
                     | _ ->
@@ -78,8 +74,9 @@ let propagate = object (self : 'self)
                   end
                 | _ -> Errors.bug ~at:e "Expr.Constness.propagate#expr: Ix"
             end
-          | ( Opaque _
-            | Tquant _
+          |  Opaque _ ->
+              true
+          | ( Tquant _
             | Sub _
             | Tsub _
             | Fair _
@@ -98,8 +95,8 @@ let propagate = object (self : 'self)
               Errors.bug ~at:e "Expr.Constness.propagate#expr: Lambda"
           | Sequent sq ->
               Errors.bug ~at:e "Expr.Constness.propagate#expr: Sequent"
-          | Bang _ ->
-              Errors.bug ~at:e "Expr.Constness.propagate#expr: Bang"
+          | Bang (e,_) -> (* TL: we ignore the selection for now *)
+            is_const e
           | Apply (op, args) ->
               is_const op && List.for_all is_const args
           | Let (ds, e) -> begin
@@ -112,7 +109,7 @@ let propagate = object (self : 'self)
                     in
                     dgood &&
                       let h = Defn (d, User, Visible, Local) @@ d in
-                      let h = assign h isconst () in
+                      let h = assign h isconst true in
                       c_defns (Deque.snoc cx h) ds
                   end
               in
@@ -140,7 +137,7 @@ let propagate = object (self : 'self)
                     in
                     bdgood &&
                       let h = Fresh (v, Shape_expr, Constant, Unbounded) @@ v in
-                      let h = assign h isconst () in
+                      let h = assign h isconst true in
                       c_bounds (Deque.snoc cx h) bs
                   end
               in
@@ -184,10 +181,9 @@ let propagate = object (self : 'self)
                   | Some e -> is_const e
               end
         in
-        (* Util.eprintf e *)
-        (*   "const (%a) <-- %b@." *)
-        (*   (Fmt.pp_print_expr (snd scx, Ctx.dot)) e *)
-        (*   const ; *)
-        if const then assign e isconst () else e
+        assign e isconst const
 
+  method hyp scx h = if (has_const h) then (scx,h) else super#hyp scx h
+  method pform scx p = if (has_const p) then p else super#pform scx p
+  method defn scx p = if (has_const p) then p else super#defn scx p
 end

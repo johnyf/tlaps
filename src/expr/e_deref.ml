@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 28687 $";;
+Revision.f "$Rev: 33173 $";;
 
 open Ext
 open Property
@@ -74,7 +74,7 @@ let find_label =
       | None ->
           self#expr scx sq.active ;
           scx
-      | Some ({core = Fact (e, _)} as h, sqcx) ->
+      | Some ({core = Fact (e, _, _)} as h, sqcx) ->
           self#expr scx e ;
           let cx = Deque.snoc cx h in
           self#sequent (l, cx) { sq with context = sqcx }
@@ -225,7 +225,7 @@ and deref_num cx (ds, e) n =
                 app_expr (shift (- k)) sq.active
             | Some (h, hs) -> begin
                 match h.core with
-                  | Fact (f, _) ->
+                  | Fact (f, _, _) ->
                       if k + 1 = n then
                         app_expr (shift (- k)) f
                       else

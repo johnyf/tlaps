@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 31530 $";;
+Revision.f "$Rev: 34655 $";;
 
 open Ext
 open Property
@@ -84,12 +84,12 @@ let localize_axioms body =
               | None ->
                   (prefix, app_expr (shift 1) e)
               | Some nm ->
-                  ((Definition (Operator (nm, e) @@ mu, Proof, Visible, Export)
+                  ((Definition (Operator (nm, e) @@ mu, Proof Always, Visible, Export)
                     @@ mu)
                    :: prefix,
                    Ix 2 @@ mu)
             in
-            let h = Fact (e, Visible) @@ mu in
+            let h = Fact (e, Visible, Always) @@ mu in
             let rec insert_ax rinits n = function
               | [] -> List.rev rinits
               | mu :: mus ->
@@ -486,6 +486,12 @@ let rec normalize mcx cx m =
             (* treat pragma definitions as usual operator definitions *)
         | Definition ({core = Bpragma (nm, _, _)} as df, wd, vis, ex) ->
           begin
+            let df =
+                let visitor = object
+                  inherit Expr.Constness.const_visitor
+                end
+                in
+                visitor#defn ((),cx) df in
             let df = if is_anon then df else anon#defn ([], cx) df in
             let mu = Definition (df, wd, vis, ex) @@ mu in
             (* merge identical operator definitions *)
@@ -526,6 +532,12 @@ let rec normalize mcx cx m =
             if redundant then begin
               spin mcx cx mus
             end else begin
+              let e =
+                let visitor = object
+                  inherit Expr.Constness.const_visitor
+                end
+                in
+                visitor#expr ((),cx) e in
               let e = anon#mexpr mcx ([], cx) e in
               let mu = Axiom (nm, e) @@ mu in
               continue mcx cx mu "Axiom"
@@ -537,31 +549,72 @@ let rec normalize mcx cx m =
               | Some nm ->
                   Deque.find cx (Expr.Anon.hyp_is_named nm.core) != None
             in
-            if redundant then begin
-              spin mcx cx mus
-            end else begin
+            let (nm, pf, pf_orig) =
+              if redundant then begin
+                let name =
+                  match nm with
+                  | Some n -> ("(redundant)" ^ n.core) @@ n
+                  | _ -> assert false
+                in
+                (Some name, Obvious @@ pf, Obvious @@ pf_orig)
+              end else (nm, pf, pf_orig)
+            in
+            begin
+              let (_, sq) =
+                let visitor = object
+                  inherit Expr.Constness.const_visitor
+                end
+                in
+                visitor#sequent ((),cx) sq in
               let (_, sq) = anon#msequent mcx ([], cx) sq in
               let pf =
                 let (cx, sq) =
                   match nm with
                   | Some nm ->
                       let op = Operator (nm, exprify_sequent sq @@ nm) @@ mu in
-                      (Deque.snoc cx (Defn (op, Proof, Visible, Export) @@ mu),
+                      (Deque.snoc cx (Defn (op, Proof Always, Visible, Export) @@ mu),
                        app_sequent (shift 1) sq)
                   | None ->
                       (cx, sq)
                 in
                 let cx = Deque.append cx sq.context in
+                let time_flag = Expr.Temporal_props.check_time_change sq.context Always in
                 Util.eprintf ~debug:"simplify" ~at:mu
                   "@[<v0>Simplifying:@,  THEOREM %a@,  %a@]"
                   (Expr.Fmt.pp_print_expr (Deque.empty, Ctx.dot))
                   (exprify_sequent sq @@ mu)
                   (Proof.Fmt.pp_print_proof (cx, Ctx.dot)) pf;
+                (*let pf =
+                  let visitor1 = object
+                    inherit [unit] Proof.Visit.map as proofer
+                    inherit Expr.Constness.const_visitor
+                    method proof scx pf = proofer#proof scx pf
+                  end
+                  in
+                  visitor1#proof ((),cx) pf in*)
                 let pf = anon#mproof mcx ([], cx) pf in
                 if m.core.important then
-                  Proof.Simplify.simplify cx sq.active pf
+                  Proof.Simplify.simplify cx sq.active pf time_flag
                 else pf
               in
+              (* we apply it later to obligations so we can skip the proofs
+               * themselves *)
+(*              let pf =
+                let visitor = object
+                  inherit [unit] Proof.Visit.map as proofer
+                  inherit Expr.Constness.const_visitor
+                  method proof scx pf = proofer#proof scx pf
+                end
+                in
+                visitor#proof ((),cx) pf in
+              let pf =
+                let visitor = object
+                  inherit [unit] Proof.Visit.map as proofer
+                  inherit Expr.Leibniz.leibniz_visitor
+                  method proof scx pf = proofer#proof scx pf
+                end
+                in
+                visitor#proof ((),cx) pf in *)
               let mu = Theorem (nm, sq, naxs, pf, pf_orig, summ) @@ mu in
               continue mcx cx mu "Theorem"
             end

@@ -2,7 +2,7 @@
 # Copyright (C) 2011  INRIA and Microsoft Corporation
 #
 
-COMPFLAGS = -annot -g -w -a+1..3+5+6+8+10..26+29..31+36 -warn-error +a \
+COMPFLAGS = -annot -g -warn-error +1+2+5+6+8+10..26+29..31+36 \
             ${ADDCOMPFLAGS}
 LINKFLAGS = -g ${ADDLINKFLAGS}
 
@@ -14,15 +14,16 @@ OCAMLLEX = ocamllex${OPTTOOLS} -q
 OCAMLDOC = ocamldoc${OPTTOOLS}
 
 FRONTEND_PACK = \
-  frontend/coalesce frontend/tla_norm frontend/action
+  frontend/symbol_commute frontend/coalesce frontend/action frontend/pltl
 
 BACKEND_PACK = \
-  backend/types backend/toolbox backend/isabelle backend/zenon \
-  backend/fingerprints backend/fpfile \
+  backend/types backend/isabelle backend/zenon \
+  backend/ls4 backend/fingerprints backend/fpfile \
   backend/prep
 
 MODULE_PACK = \
-  module/m_t module/m_fmt module/m_gen module/m_elab module/m_standard \
+  module/m_t module/m_fmt module/m_globalness module/m_gen module/m_elab \
+  module/m_standard \
   module/m_flatten module/m_dep module/m_parser module/m_save
 
 PROOF_PACK = \
@@ -33,8 +34,9 @@ PARS_PACK = \
   pars/error pars/intf pars/lazyList pars/pco
 
 EXPR_PACK = \
-  expr/e_t expr/e_fmt expr/e_subst expr/e_visit expr/e_eq expr/e_deref \
-  expr/e_constness expr/e_parser expr/e_elab expr/e_anon
+  expr/e_t expr/e_visit expr/e_constness expr/e_fmt expr/e_subst expr/e_eq expr/e_deref \
+  expr/e_leibniz expr/e_parser expr/e_tla_norm expr/e_temporal_props \
+  expr/e_elab expr/e_anon
 
 SMT_DIR = \
   smt/typesystem smt/smtcommons smt/typeinfer smt/fmt smt/ground smt/simpl \
@@ -48,11 +50,12 @@ MODULES = revision sysconf \
   isabelle_keywords tla_parser util/deque alexer ${EXPR_PACK} expr \
   ${SMT_DIR} backend/smt \
   method_prs \
-  ${PROOF_PACK} proof ${FRONTEND_PACK} backend/schedule ${BACKEND_PACK} backend \
-  util/timing ${MODULE_PACK} module tlapm_args tlapm
+  ${PROOF_PACK} proof util/timing ${MODULE_PACK} module ${FRONTEND_PACK} \
+  backend/toolbox backend/schedule ${BACKEND_PACK} backend \
+  tlapm_args tlapm
 
-INC0 = -I ../backend -I ../frontend -I ../expr -I ../module -I ../proof -I ../util \
-       -I ../pars -I ../smt
+INC0 = -I ../backend -I ../frontend -I ../expr -I ../module -I ../proof \
+       -I ../util -I ../pars -I ../smt
 
 INC = ${INC0:../%=%}
 INC1 = ${INC0} -I ..

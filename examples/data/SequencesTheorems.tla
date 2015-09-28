@@ -49,7 +49,7 @@ THEOREM InitialSubSeq ==
   <2>3. QED
     BY <1>1, <2>1, <2>2, SeqDef, IsaM("force")
 <1>3. Len(SubSeq(s, 1, j)) = j
-  BY <1>1, <1>2, LenDef, SMT
+  BY <1>1, <1>2, LenDef, DOMAIN SubSeq(s,1,j) = 1..j, j \in Nat, LenDomain
 <1>4. QED
   BY <1>1, <1>2, <1>3
 
@@ -121,7 +121,7 @@ THEOREM AppendDef ==
    PROVE  Append(seq, elt) =
                 [i \in 1..(Len(seq)+1) |-> IF i \leq Len(seq) THEN seq[i]
                                                               ELSE elt]
-PROOF OMITTED
+BY SMT
 
 THEOREM AppendProperties ==
           \A S :
@@ -130,24 +130,25 @@ THEOREM AppendProperties ==
                 /\ Len(Append(seq, elt)) = Len(seq)+1
                 /\ \A i \in 1.. Len(seq) : Append(seq, elt)[i] = seq[i]
                 /\ Append(seq, elt)[Len(seq)+1] = elt
-PROOF OMITTED
+BY SMT
 -----------------------------------------------------------------------------
 (***************************************************************************)
 (*                           Concatenation (\o)                            *)
 (***************************************************************************)
 THEOREM ConcatDef ==
-           \A s1, s2 : s1 \o s2 =
+           \A S: 
+           \A s1, s2 \in Seq(S) : s1 \o s2 =
                          [i \in 1..(Len(s1)+Len(s2)) |->
                            IF i \leq Len(s1) THEN s1[i]
                                              ELSE s2[i-Len(s1)]]
-PROOF OMITTED
+BY SMT
 
 THEOREM ConcatProperties ==
            \A S :
              \A s1, s2 \in Seq(S) :
                  /\ s1 \o s2 \in Seq(S)
                  /\ Len(s1 \o s2) = Len(s1) + Len(s2)
-PROOF OMITTED
+BY ConcatDef, SMT
 
 THEOREM ConcatEmptySeq ==
           \A S : \A seq \in Seq(S) : /\ seq \o << >> = seq

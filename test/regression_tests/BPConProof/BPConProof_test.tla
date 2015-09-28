@@ -1,5 +1,5 @@
 
----------------------------- MODULE BPConProof_test_not_working ------------------------------
+---------------------------- MODULE BPConProof_test ------------------------------
 (***************************************************************************)
 (* This module specifies a Byzantine Paxos algorithm--a version of Paxos   *)
 (* in which failed acceptors and leaders can be malicious.  It is an       *)
@@ -4218,6 +4218,7 @@ THEOREM chosen \subseteq P!chosen
 zzzz == "abcdefgh"
 ==============================================================================
 \* Modification History
+\* Last modified Mon Aug 18 14:57:27 CEST 2014 by tomer
 \* Last modified Mon Mar 04 19:44:33 CET 2013 by doligez
 \* Last modified Mon Mar 04 17:24:05 CET 2013 by doligez
 \* Last modified Wed Nov 30 15:47:26 PST 2011 by lamport

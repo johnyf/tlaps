@@ -99,7 +99,13 @@ A == INSTANCE Alternate WITH v <- vBar
 (***************************************************************************)
 THEOREM Mod2 == \A i \in {0,1} : /\ (i + 1) % 2 = 1 - i
                                  /\ (i + 0) % 2 = i
-BY SMT
+  <1>1 /\ (0 + 1) % 2 = 1 - 0
+       /\ (0 + 0) % 2 = 0
+       /\ (1 + 1) % 2 = 1 - 1
+       /\ (1 + 0) % 2 = 1
+    BY SMT
+  <1> QED
+    BY <1>1   
 
 (***************************************************************************)
 (* The following theorem is a standard proof that one specification        *)
@@ -116,13 +122,13 @@ THEOREM Implementation == Spec => A!Spec
   <2>2. Inv /\ [Next]_<<p, c, x>> => Inv'
     BY Mod2 DEF Inv, Next, ProducerStep, ConsumerStep
   <2>3. QED
-    PROOF OMITTED  \* temporal reasoning
+    BY <2>1, <2>2, PTL DEF Spec
 <1>2. QED
   <2>1. Init => A!Init
     BY Mod2 DEF Init, A!Init, vBar
   <2>2. Inv /\ [Next]_<<p, c, x>>  => [A!Next]_<<vBar, x>>
     BY Mod2 DEF Inv, Next, ProducerStep, ConsumerStep, A!Next, vBar
   <2>3. QED
-     PROOF OMITTED  \* temporal reasoning
+     BY <1>1, <2>1, <2>2, PTL DEF Spec, A!Spec
 ==============================================================
 \* Generated at Sat Oct 31 03:15:55 PDT 2009

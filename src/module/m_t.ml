@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 28687 $";;
+Revision.f "$Rev: 33173 $";;
 
 (** Modules *)
 
@@ -98,10 +98,10 @@ let hyps_of_modunit (mu : modunit) = match mu.core with
   | Definition (df, wd, vis, ex) ->
       [ Defn (df, wd, vis, ex) @@ mu ]
   | Axiom (None, e) ->
-      [ Fact (e, Hidden) @@ mu ]
+      [ Fact (e, Hidden, Always) @@ mu ]
   | Axiom (Some nm, e) -> [
       Defn (Operator (nm, e) @@ mu, User, Visible, Export) @@ mu ;
-      Fact (Ix 1 @@ mu, Hidden) @@ mu ;
+      Fact (Ix 1 @@ mu, Hidden, Always) @@ mu ;
     ]
   | Theorem (nm, sq, naxs, _, _, _) -> begin
       let rec drop sq = function
@@ -115,16 +115,16 @@ let hyps_of_modunit (mu : modunit) = match mu.core with
       let sq = app_sequent (shift (- naxs)) (drop sq naxs) in
       match nm with
         | None ->
-            [ Fact (exprify_sequent sq @@ mu, Hidden) @@ mu ]
+            [ Fact (exprify_sequent sq @@ mu, Hidden, Always) @@ mu ]
         | Some nm -> [
             Defn (Operator (nm, exprify_sequent sq @@ nm) @@ mu,
                   User, Visible, Export) @@ mu ;
-            Fact (Ix 1 @@ mu, Hidden) @@ mu ;
+            Fact (Ix 1 @@ mu, Hidden, Always) @@ mu ;
           ]
     end
   | Mutate (`Use _, us) ->
       List.mapi begin
-        fun n f -> Fact (app_expr (shift n) f, Visible) @@ mu
+        fun n f -> Fact (app_expr (shift n) f, Visible, Always) @@ mu
       end us.facts
   | Submod _
   | Mutate _

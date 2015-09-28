@@ -15,10 +15,7 @@ case $host_os in
   *mingw* )
     EXE=".exe" ;;
   *cygwin* )
-    EXE=".exe"
-    DLL_VERSION=`uname -r | cut -d. -f1,2`
-    AS_IF([test "x$DLL_VERSION" != "x1.7"],
-      AC_MSG_ERROR([TLAPS requires Cygwin version 1.7])) ;;
+    EXE=".exe";;
   * )
     EXE="" ;;
 esac
@@ -79,7 +76,7 @@ AS_IF([test "$silent" != yes],[cat <<EOF
 The TLA+ Proof Manager (version @VERSION@) has been
 successfully configured.
 
-Run 'make all install' to build and install the PM in
+Run 'make' to build the PM and 'make install' to install it in
 
     ${prefix}/
 

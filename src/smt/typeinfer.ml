@@ -6,7 +6,7 @@
  * Copyright (C) 2011-2012  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32009 $";;
+Revision.f "$Rev: 34678 $";;
 
 open Ext
 open Property
@@ -15,9 +15,10 @@ open Expr.T
 open Expr.Subst
 
 open Printf
+open List
 
-open Typesystem
 open Smtcommons
+open Typesystem
 
 module B = Builtin;;
 
@@ -36,7 +37,7 @@ let rec is_safe_fact e =
     let rec arity e = 
         match e.core with
         | Ix _ | Opaque _ -> 0
-        | Apply ({core = Ix _ | Opaque _}, es) -> 1(* List.length es *)
+        | Apply ({core = Ix _ | Opaque _}, es) -> 1(* length es *)
         | Apply ({core = Internal B.Prime}, [ex]) -> arity ex
         | _ -> -1
     in
@@ -47,8 +48,8 @@ let rec is_safe_fact e =
                      }, [e1 ; _]) 
         when arity e1 = 0 -> true
     (* | Apply ({core = Internal B.Disj}, es) | List (Or, es) -> 
-        List.for_all is_safe_fact es && 
-        List.for_all begin fun e -> 
+        for_all is_safe_fact es && 
+        for_all begin fun e -> 
             match e.core with
             | Apply ({core =   Internal B.Mem
                              | Internal B.Eq 
@@ -60,7 +61,7 @@ let rec is_safe_fact e =
             ({core = Apply ({core = (Internal B.Mem | 
                                      Internal B.Eq | 
                                      Internal B.Subseteq)}, [e1 ; _])} as exp))
-            when arity e1 = List.length bs + 1 ->
+            when arity e1 = length bs + 1 ->
         let (bounds, exp) = split_domain Forall exp [b] bs in
         let sort = ref Bot in
         let aux = function 
@@ -71,9 +72,9 @@ let rec is_safe_fact e =
             types#update (quant_id v.core) !sort
         | _ -> Util.bug "src/backend/typeinfer.ml \n"
         in            
-        List.iter aux bounds ;
+        iter aux bounds ;
         ignore (type_infer Update_fact (add_bs_ctx bounds cx) exp Bool) ;
-        List.iter (fun (v,_,_) -> types#remove (quant_id v.core)) bounds *)
+        iter (fun (v,_,_) -> types#remove (quant_id v.core)) bounds *)
     | _ -> false
     ;;
 
@@ -119,10 +120,7 @@ let rec type_infer (ia:inferAction) cx e (min:tlatype) : tlatype =
                 (if types#exists (prime id) then types#update (prime id) typ)
             ) ; typ
         in
-        let is_unspec id = 
-            try ((String.sub id 0 (String.length "unspec__")) = "unspec__")
-            with _ -> false 
-        in
+        let is_unspec id = check_prefix id "unspec__" in
         if is_unspec id then update_ix is_primed id (TLAtype.max min (types#find id)) else
         begin match ia with
         | Update_fact -> 
@@ -157,7 +155,7 @@ let rec type_infer (ia:inferAction) cx e (min:tlatype) : tlatype =
         | B.Implies, _
         | B.Equiv, _ 
         | B.Neg, _ -> 
-            List.iter (infi Bot cx) es ; Bool
+            iter (infi Bot cx) es ; Bool
         | B.Eq,  [e1 ; e2]
         | B.Neq, [e1 ; e2] ->
             eqi Bot cx e1 e2 ; Bool             
@@ -218,7 +216,7 @@ let rec type_infer (ia:inferAction) cx e (min:tlatype) : tlatype =
             end
         | B.Seq,       [ex]      -> infi (P Bot) cx ex ; P (Tup [])
         | B.Len,       [ex]      -> infi Bot cx ex ; Int
-        | B.BSeq,      [e1 ; e2] -> List.iter (infi Bot cx) es ; Bot
+        | B.BSeq,      [e1 ; e2] -> iter (infi Bot cx) es ; Bot
         | B.Cat,       [e1 ; e2] -> 
             let t1 = inf min cx e1 in
             let t2 = inf min cx e2 in
@@ -237,17 +235,17 @@ let rec type_infer (ia:inferAction) cx e (min:tlatype) : tlatype =
         | B.Head,      [ex]      -> 
             begin match inf Bot cx ex with
             | Tup [] -> Bot
-            | Tup ts -> List.hd ts
+            | Tup ts -> hd ts
             | _ -> Bot
             end
         | B.Tail,      [ex]      -> 
             begin match inf Bot cx ex with
             | Tup [] -> Bot
-            | Tup ts -> Tup (List.tl ts)
+            | Tup ts -> Tup (tl ts)
             | _ -> Tup []
             end
-        | B.SubSeq,    [e1;e2;e3]-> List.iter (infi Bot cx) es ; Tup []
-        | B.SelectSeq, [e1 ; e2] -> List.iter (infi Bot cx) es ; Tup []
+        | B.SubSeq,    [e1;e2;e3]-> iter (infi Bot cx) es ; Tup []
+        | B.SelectSeq, [e1 ; e2] -> iter (infi Bot cx) es ; Tup []
 
         | B.OneArg,    [e ; f] -> Bot
         | B.Extend,    [e ; f] -> Bot
@@ -272,17 +270,17 @@ let rec type_infer (ia:inferAction) cx e (min:tlatype) : tlatype =
     | Internal B.TRUE
     | Internal B.FALSE ->
         Bool
-    | List (_, es) -> List.iter (infi Bot cx) es ; Bool
+    | List (_, es) -> iter (infi Bot cx) es ; Bool
     | Quant (_, ((_, _, No_domain) :: _ as bs), ex) -> 
         let cx = add_bs_ctx bs cx in
         infer_facts_bounded cx ex ;
         infi Bot cx ex ; 
-        List.iter (fun (v,_,_) -> types#remove ((* quant_id *) v.core)) bs ;
+        iter (fun (v,_,_) -> types#remove ((* quant_id *) v.core)) bs ;
         Bool
     | Quant (q, ((v, _, Domain dom) as b :: bs), ex) ->
         let (bs, ex) = split_domain q ex [b] bs in
-        let dom = app_expr (shift (List.length bs)) dom in
-        let exdom = List.fold_left (fun r b -> (Apply (Internal B.Mem |> mk, [ Ix (List.length r + 1) |> mk ; dom]) |> mk) :: r) [] bs in
+        let dom = app_expr (shift (length bs)) dom in
+        let exdom = fold_left (fun r b -> (Apply (Internal B.Mem |> mk, [ Ix (length r + 1) |> mk ; dom]) |> mk) :: r) [] bs in
         let exdom = match exdom with
         | [] -> Internal B.TRUE |> mk
         | [b] -> b
@@ -293,7 +291,7 @@ let rec type_infer (ia:inferAction) cx e (min:tlatype) : tlatype =
         let cx = add_bs_ctx bs cx in
         infer_facts_bounded cx ex2 ;
         infi Bot cx ex ; 
-        List.iter (fun (v,_,_) -> types#remove ((* quant_id *) v.core)) bs ;
+        iter (fun (v,_,_) -> types#remove ((* quant_id *) v.core)) bs ;
         Bool
     | Internal B.BOOLEAN -> P Bool
     | Internal B.STRING -> P Str
@@ -310,9 +308,9 @@ let rec type_infer (ia:inferAction) cx e (min:tlatype) : tlatype =
         | _ -> assert false
         in
         let tbs = inf_bs cx (unditto bs) in
-        List.iter (fun (h,t) -> types#update ((* quant_id *) h.core) t) tbs ;
+        iter (fun (h,t) -> types#update ((* quant_id *) h.core) t) tbs ;
         let t = inf (TLAtype.base min) (add_bs_ctx bs cx) ex in
-        List.iter (fun (h,_) -> types#remove ((* quant_id *) h.core)) tbs ;
+        iter (fun (h,_) -> types#remove ((* quant_id *) h.core)) tbs ;
         P t
     | SetSt (h, dom, ex) ->
         let typd = inf (P Bot) cx dom in
@@ -342,7 +340,10 @@ let rec type_infer (ia:inferAction) cx e (min:tlatype) : tlatype =
         TLAtype.base (inf (P Bot) cx dom)
     | FcnApp (f, [{core = Num (n,"")}]) ->
         begin match inf Bot cx f with
-        | Tup ts -> begin try List.nth ts ((int_of_string n) - 1) with _ -> Bot end
+        | Tup ts ->
+            begin try nth ts ((int_of_string n) - 1)
+            with Invalid_argument _ | Failure _ -> Bot
+            end
         | Fcn ((Bot|Int|Real),b) -> b
         | t -> Bot
         end
@@ -353,9 +354,9 @@ let rec type_infer (ia:inferAction) cx e (min:tlatype) : tlatype =
         | Fcn (a, b), _ -> infi a cx arg ; b
         | Tup types, Num (n,"") -> 
             let i = int_of_string n in
-            (try List.nth types (i - 1) with _ -> Bot)
+            (try nth types (i - 1) with Invalid_argument _ | Failure _ -> Bot)
         | Rec _, String h -> TLAtype.dot f_type h
-            (* begin try SMap.find h m with _ -> Bot end *)
+            (* begin try SMap.find h m with Not_found -> Bot end *)
         | t, _ -> Bot
         end
     | FcnApp (f, a :: args) ->        (** f[x,y] = (f[x])[y] *)
@@ -395,10 +396,10 @@ let rec type_infer (ia:inferAction) cx e (min:tlatype) : tlatype =
     | Dot (ex, h) ->
         TLAtype.get_fieldtyp h (inf (Rec (SMap.singleton h min)) cx ex)
     | Record rs -> 
-        Rec (list_to_map (List.map (fun (h,e) -> (h, inf (TLAtype.dot min h) cx e)) rs))
+        Rec (list_to_map (map (fun (h,e) -> (h, inf (TLAtype.dot min h) cx e)) rs))
     | Rect rs ->
         (** does not consider min *)
-        P (Rec (list_to_map (List.map (fun (h,e) -> (h, TLAtype.base (inf (P Bot) cx e))) rs)))
+        P (Rec (list_to_map (map (fun (h,e) -> (h, TLAtype.base (inf (P Bot) cx e))) rs)))
     | Except ({core = Ix n}, _) ->
         types#find (lookup_id cx n)
     | Except (ex, [([Except_dot h],e)]) ->
@@ -410,10 +411,10 @@ let rec type_infer (ia:inferAction) cx e (min:tlatype) : tlatype =
         | _ -> Util.bug "src/backend/typeinfer.ml 400"
         end *)
     | Tuple es ->
-        Tup (List.map (inf Bot cx) es)
+        Tup (map (inf Bot cx) es)
     | Product es -> 
         (** does not consider min *)
-        P (Tup (List.map (fun e -> TLAtype.base (inf (P Bot) cx e)) es))
+        P (Tup (map (fun e -> TLAtype.base (inf (P Bot) cx e)) es))
     | Num (m, "") -> 
         (* if ia = Get_type_bounds then Int else *)
         begin match min with
@@ -440,19 +441,19 @@ let rec type_infer (ia:inferAction) cx e (min:tlatype) : tlatype =
     | Case ((p1,e1) :: es, Some other) ->
         infi Bool cx p1 ;
         let sort1 = inf Bot cx e1 in
-        List.iter (fun (p,e) -> infi Bot cx p ; infi sort1 cx e) es ;
+        iter (fun (p,e) -> infi Bot cx p ; infi sort1 cx e) es ;
         infi sort1 cx other ;
         sort1
     | Case ((p1, e1) :: es, None) ->
         infi Bool cx p1 ;
         let sort1 = inf Bot cx e1 in
-        List.iter (fun (p,e) -> infi Bot cx p ; infi sort1 cx e) es ;
+        iter (fun (p,e) -> infi Bot cx p ; infi sort1 cx e) es ;
         sort1
     | Apply (pred, args) -> 
         let ptyps = TLAtype.args (inf Bot cx pred) in
-        let ptyps = if List.length ptyps = List.length args then ptyps else (List.map (fun _ -> Bot) args) in
-        let argtypes = List.rev_map2 (fun a b -> inf b cx a) args ptyps in
-        let typ = List.fold_left (fun s a -> Fcn (a,s)) min argtypes in
+        let ptyps = if length ptyps = length args then ptyps else (map (fun _ -> Bot) args) in
+        let argtypes = rev_map2 (fun a b -> inf b cx a) args ptyps in
+        let typ = fold_left (fun s a -> Fcn (a,s)) min argtypes in
         let typ = inf typ cx pred in
         begin match typ with
         | P _ as t -> eqi t cx pred (SetEnum args |> mk)
@@ -468,10 +469,10 @@ let rec type_infer (ia:inferAction) cx e (min:tlatype) : tlatype =
                 | ({core = h},_) :: xs -> ((Flex ((* quant_id *) h |> mk)) |> mk) :: new_ctx_vars xs
                 | [] -> []
             in  
-            List.rev (new_ctx_vars xs) @ cx
+            rev (new_ctx_vars xs) @ cx
         in
         let t = inf Bot (add_to_ctx cx xs) ex in
-        List.fold_left (fun r _ -> Fcn (Bot,r)) t xs
+        fold_left (fun r _ -> Fcn (Bot,r)) t xs
         (* Fcn (Bot, t) *)
     | Parens (ex,_) ->
         inf min cx ex
@@ -480,7 +481,7 @@ let rec type_infer (ia:inferAction) cx e (min:tlatype) : tlatype =
         assert false
 and infer_facts_bounded cx e =
     let (hyps,_) = deimpl e in
-    List.iter (fun h -> ignore (proc_typing_hyp cx h)) hyps
+    iter (fun h -> ignore (proc_typing_hyp cx h)) hyps
 and proc_typing_hyp cx e = 
     if is_safe_fact e then ignore (type_infer Update_fact cx e Bool) else () ; e
 ;;
@@ -489,10 +490,10 @@ and proc_typing_hyp cx e =
 (****************************************************************************)
 
 let rec get_ids cx e : string list =
-    let get_idss cx es = List.fold_left (fun r e -> get_ids cx e @ r) [] es in
+    let get_idss cx es = fold_left (fun r e -> get_ids cx e @ r) [] es in
     match e.core with
     | Ix n -> [lookup_id cx n]
-        (* begin match (List.nth cx (n - 1)).core with
+        (* begin match (nth cx (n - 1)).core with
         | Defn ({core = Operator (h,_)},_,_,_) -> [h.core]
         | _ -> []
         end *)
@@ -510,21 +511,21 @@ let rec get_ids cx e : string list =
         get_ids cx f @ get_ids cx e1 @ get_ids cx e2
     | Except (r, exs) ->
         let ops_exps = function Except_apply ea -> [get_ids cx ea] | _ -> [] in
-        get_ids cx r @ List.flatten (List.map (fun (exps,ex) -> (List.flatten (List.flatten (List.map ops_exps exps))) @ (get_ids cx ex)) exs)
+        get_ids cx r @ flatten (map (fun (exps,ex) -> (flatten (flatten (map ops_exps exps))) @ (get_ids cx ex)) exs)
     | Arrow (e1,e2) -> 
         get_idss cx [e1 ; e2]
     | Dot (ex,_) | Parens (ex,_) -> 
         get_ids cx ex
     | Record rs | Rect rs -> 
-        let es = List.map (fun (_,e) -> e) rs in
+        let es = map (fun (_,e) -> e) rs in
         get_idss cx es
     | If (c, t, f) -> 
         get_idss cx [c ; t ; f]
     | Case (es, None) ->
-        let (es1,es2) = List.split es in
+        let (es1,es2) = split es in
         get_idss cx (es1 @ es2)
     | Case (es, Some o) ->
-        let (es1,es2) = List.split es in
+        let (es1,es2) = split es in
         get_idss cx (es1 @ es2 @ [o])
     | Sequent seq ->
         get_ids cx (unroll_seq seq)
@@ -534,7 +535,7 @@ let rec get_ids cx e : string list =
         let bs = [hint, Unknown, Domain dom] in
         get_ids (add_bs_ctx bs cx) ex @ get_ids_bs cx bs
     | Lambda (vs, ex) -> 
-        let vs = List.fold_right (fun (h,s) r -> match s with Shape_expr -> (h, Unknown, No_domain) :: r | Shape_op _ -> r) vs [] in
+        let vs = fold_right (fun (h,s) r -> match s with Shape_expr -> (h, Unknown, No_domain) :: r | Shape_op _ -> r) vs [] in
         get_ids (add_bs_ctx vs cx) ex
     | _ ->
         Util.eprintf ~at:e "function get_ids cannot print@\n%a" (print_prop ()) e ;
@@ -544,11 +545,11 @@ and get_ids_bs cx bs =
     | (_, _, Domain dom) -> get_ids cx dom
     | _ -> []
     in
-    List.fold_left (fun r b -> f cx b @ r) [] bs
+    fold_left (fun r b -> f cx b @ r) [] bs
 ;;
 
 (* let get_typable_ids cx e = 
-    get_ids cx e @ List.flatten (proc_assumptions (fun cx e _ -> get_ids cx e) (preprocess_context cx))
+    get_ids cx e @ flatten (proc_assumptions (fun cx e _ -> get_ids cx e) (preprocess_context cx))
 ;; *)
 
 (****************************************************************************)
@@ -567,9 +568,9 @@ and get_ids_bs cx bs =
         | Set x      -> sprintf "Set(%s)" (to_string x)
         | Fcn2 (x,y) -> sprintf "(%s -> %s)" (to_string x) (to_string y)
         (* | Rec map   -> sprintf "Rec_<%s>" (typeMap_to_string map)
-        | Tup es    -> sprintf "Tuple_[%s]" (String.concat ";" (List.map (fun t -> (to_string t)) es)) *)
+        | Tup es    -> sprintf "Tuple_[%s]" (String.concat ";" (map (fun t -> (to_string t)) es)) *)
     (* and typeMap_to_string map = 
-        String.concat "," (List.map (fun (f,t) -> sprintf "(%s:%s)" f (to_string t)) (SMap.bindings map)) *)
+        String.concat "," (map (fun (f,t) -> sprintf "(%s:%s)" f (to_string t)) (SMap.bindings map)) *)
     ;;
 
 exception Wrong_type ;;
@@ -607,7 +608,7 @@ let rec solve = function
     | [] -> ()
     | Unify t1 t2 :: cs -> 
         let subst = mgu t1 t2 in
-        let cs = List.map (fun c -> subst c) cs in
+        let cs = map (fun c -> subst c) cs in
         subst :: solve cs
     | IsSet ((P _) :: cs) -> solve cs
     | IsInt (Int :: cs) -> solve cs 
@@ -616,9 +617,9 @@ let rec solve = function
 
 let rec typeinf cx e = 
     let new_type () = "temp" ^ (fresh_name ()) in
-    let ( minus ) a v = List.filter (fun (x,_) -> x <> v) a in
-    let ass_freevar a v = List.fold_left (fun r (x,t) -> if x = v then t :: r else r) [] a in
-    let check ts t = if List.for_all (fun x -> x = t) ts then () else raise Wrong_type in
+    let ( minus ) a v = filter (fun (x,_) -> x <> v) a in
+    let ass_freevar a v = fold_left (fun r (x,t) -> if x = v then t :: r else r) [] a in
+    let check ts t = if for_all (fun x -> x = t) ts then () else raise Wrong_type in
     match e.core with
     | Ix n ->
         let id = lookup_id cx n in 
@@ -638,19 +639,19 @@ let rec typeinf cx e =
         let tx = Var v.core in
         let a1,c1,td = typeinf cx d in
         let a2,c2,te = typeinf (add_bs_ctx bs cx) ex in
-        let c3 = List.map (fun t -> Unify tx t) (ass_freevar a2 v.core) in
+        let c3 = map (fun t -> Unify tx t) (ass_freevar a2 v.core) in
         ((a1 @ a2) minus v.core, c1 @ c2 @ [Unify td (P tx)] @ c3, Fcn2 tx te)
     | Quant (_, ([v, _, Domain d] as bs), ex) -> 
         let tx = Var v.core in
         let a1,c1,td = typeinf cx d in
         let a2,c2,te = typeinf (add_bs_ctx bs cx) ex in
-        let c3 = List.map (fun t -> Unify tx t) (ass_freevar a2 v.core) in
+        let c3 = map (fun t -> Unify tx t) (ass_freevar a2 v.core) in
         check [te] Bool ;
         ((a1 @ a2) minus v.core, c1 @ c2 @ [Unify td (P tx)] @ c3, Bool2)
     | Quant (_, ([v, _, No_domain] as bs), ex) -> 
         let tx = Var v.core in
         let a,c,te = typeinf (add_bs_ctx bs cx) ex in
-        let c2 = List.map (fun t -> Unify tx t) (ass_freevar a v.core) in
+        let c2 = map (fun t -> Unify tx t) (ass_freevar a v.core) in
         check [te] Bool ;
         (a minus v.core, c @ c2, Bool2)
     | Arrow (s,t) -> 
@@ -707,13 +708,13 @@ let rec typeinf cx e =
         end
     | Apply (f, es) -> 
         let c,t = typeinf ass cx f in
-        let cs,ts = List.split (List.map (typeinf ass cx) es) in
+        let cs,ts = split (map (typeinf ass cx) es) in
         (c @ cs @ )
     (* | List (b,es) ->     *)
     | SetEnum [] -> ([], Set (Var (new_type ())))
     | SetEnum es -> 
-        let cs,ts = List.split (List.map (typeinf ass cx) es) in
-        (List.concat cs @ [List.fold_left (fun r t -> ) [] ts], Set (List.hd ts))
+        let cs,ts = split (map (typeinf ass cx) es) in
+        (concat cs @ [fold_left (fun r t -> ) [] ts], Set (hd ts))
     | Internal B.Nat -> ([], Set Int2)
     | Internal B.Int -> ([], Set Int2)
     | If (c,t,f) -> 
@@ -739,7 +740,7 @@ let rec typeinf cx e =
                 | ({core = h},_) :: xs -> ((Flex ((* quant_id *) h |> mk)) |> mk) :: new_ctx_vars xs
                 | [] -> []
             in  
-            List.rev (new_ctx_vars xs) @ cx
+            rev (new_ctx_vars xs) @ cx
         in *)
     | _ -> 
         raise Not_found
@@ -759,7 +760,8 @@ let rec process_hyps cx = function
     | (ex,(0 as chances)) :: hs
     | (ex,chances) :: ([] as hs) -> 
         begin try process_hyps cx hs @ [proc_typing_hyp cx ex]
-        with _ -> 
+        with
+        | Not_found | Invalid_argument _ | Failure _ ->
         (* with excep -> begin match excep with
             | Untyped_symbol msg 
             | Unification_failed msg
@@ -768,21 +770,24 @@ let rec process_hyps cx = function
             | Unsupported_expression e -> Util.eprintf "[TypeInfer] Unsupported expression"
             | _ -> failwith ("[TypeInfer] unknown exception\n")
             end ; *)
-            if chances = 0 then assert false else [] 
+            assert (chances <> 0); []
         end
     | (ex,chances) :: hs -> 
         begin try process_hyps cx hs @ [proc_typing_hyp cx ex]
-        with _ -> process_hyps cx (hs @ [ex,chances-1]) end
+        with Not_found | Invalid_argument _ | Failure _ ->
+          process_hyps cx (hs @ [ex,chances-1])
+        end
 ;;
         
 let type_inference cx all =
-    let proc p = ignore (try p with _ -> Bot) in
     let type_inf_aux es : unit =
         (*** Step 1. Assign safe types (ie: Bot, P Bot, Bot->Bot, ...) in the whole PO. *)
-        List.iter (fun e -> proc (type_infer Update_safe cx e Bool)) es ;
+        iter (fun e -> try ignore (type_infer Update_safe cx e Bool)
+                       with Not_found | Invalid_argument _ | Failure _ -> ())
+             es ;
         (*** Step 2. Domain assignment from known facts. *)
-        let hyps = List.filter (fun e -> not (is_conc e)) es in 
-        let hyps = List.map (fun e -> (e,List.length hyps + 1)) hyps in
+        let hyps = filter (fun e -> not (is_conc e)) es in 
+        let hyps = map (fun e -> (e,length hyps + 1)) hyps in
         ignore (process_hyps cx hyps) 
     in
 
@@ -792,8 +797,8 @@ let type_inference cx all =
     Printf.eprintf ">>> Type assignments:\n%s\n" types#sprint_all ;
     
     Printf.eprintf ">>> Unexpanded operators: %s\n\n" 
-        (let ops = remove_repeated (List.flatten (List.map (get_operators cx) all)) in 
-         if ops <> [] then (String.concat ", " ops) else "-.") ;
+        (let ops = remove_repeated (flatten (map (get_operators cx) all)) in 
+         if ops <> [] then (String.concat ", " ops) else "---") ;
     ()
 ;;
 
@@ -816,9 +821,9 @@ let rec get_type cx e : tlatype =
             Bool
         | B.Plus, _ | B.Minus, _ | B.Times, _ | B.Ratio, _
         | B.Quotient, _ | B.Remainder, _ | B.Exp, _ | B.Uminus, _ ->
-            if List.for_all is_int es then Int else Bot
+            if for_all is_int es then Int else Bot
         | B.Range, _ -> 
-            if List.for_all is_int es then P Int else P Bot
+            if for_all is_int es then P Int else P Bot
         | B.Prime, [ex] -> 
             get_type cx ex
         | B.DOMAIN, [f] ->
@@ -836,7 +841,7 @@ let rec get_type cx e : tlatype =
             TLAtype.base (get_type cx ex)
         | B.Len, _ -> Int
         | B.Head, ex :: _ -> get_type cx ex
-        | B.Tail, _ :: es -> Tup (List.map (get_type cx) es)
+        | B.Tail, _ :: es -> Tup (map (get_type cx) es)
         | B.Seq, _ -> P (Tup [])
         | B.BSeq, _ -> Tup []
         | B.Cat, _ -> Tup []
@@ -850,10 +855,14 @@ let rec get_type cx e : tlatype =
             Util.bug "[SMT] get_type: not supported Apply Internal"
         end
     | Apply (op, es) -> 
-        TLAtype.apply_fcn (get_type cx op) (List.map (get_type cx) es)
+        TLAtype.apply_fcn (get_type cx op) (map (get_type cx) es)
     | FcnApp (f, [{core = Num (n,"")}]) ->
         begin match get_type cx f with
-        | Tup ts -> let t = begin try List.nth ts ((int_of_string n) - 1) with _ -> Bot end in  t
+        | Tup ts ->
+            let t =
+              try nth ts ((int_of_string n) - 1)
+              with Invalid_argument _ | Failure _ -> Bot
+            in t
         | _ -> TLAtype.apply_fcn (get_type cx f) [Int]
         end
     | Internal B.TRUE
@@ -868,10 +877,10 @@ let rec get_type cx e : tlatype =
     | Num _              -> Int
     | Internal B.Nat
     | Internal B.Int     -> P Int
-    | FcnApp (f, es) -> TLAtype.apply_fcn (get_type cx f) (List.map (get_type cx) es)
+    | FcnApp (f, es) -> TLAtype.apply_fcn (get_type cx f) (map (get_type cx) es)
     | Dot (r, h)     -> TLAtype.get_fieldtyp h (get_type cx r)
-    | Tuple es       -> Tup (List.map (get_type cx) es)
-    | Record rs      -> Rec (list_to_map (List.map (fun (h,e) -> (h, get_type cx e)) rs))
+    | Tuple es       -> Tup (map (get_type cx) es)
+    | Record rs      -> Rec (list_to_map (map (fun (h,e) -> (h, get_type cx e)) rs))
     | If (_, t, f) -> 
         let t = (get_type cx t) in
         if TLAtype.eq t (get_type cx f) then t else Bot
@@ -882,7 +891,8 @@ let rec get_type cx e : tlatype =
 let get_all_types_fact cx e = 
     let proc_fact cx e = 
         let ia = if is_safe_fact e then Update_fact else Update_safe in
-        try (ignore (type_infer ia cx e Bool)) with _ -> ()
+        try (ignore (type_infer ia cx e Bool))
+        with Not_found | Invalid_argument _ | Failure _ -> ()
     in
     let get_facts e = 
         match e.core with
@@ -895,8 +905,8 @@ let get_all_types_fact cx e =
         (** TODO: sequents *)
         | _ -> []
     in
-    let facts = List.flatten (List.map deconj (get_facts e)) in
-    List.iter (proc_fact cx) facts
+    let facts = flatten (map deconj (get_facts e)) in
+    iter (proc_fact cx) facts
 ;;
 
 (****************************************************************************)
@@ -926,7 +936,7 @@ let rec paint_types cx e =
     let apply op es t = Apply (Internal op |> mk <<< t, es) |> mk <<< t in
     let is_int e = typ e = Some Int in
     let paint e = paint_types cx e in
-    let ps es = List.map paint es in
+    let ps es = map paint es in
     let typ_eq e1 e2 = 
         match typ e1, typ e2 with
         | Some t1, Some t2 -> TLAtype.eq t1 t2
@@ -944,10 +954,10 @@ let rec paint_types cx e =
         let bs = paint_bs cx bs in
         get_all_types_fact (add_bs_ctx bs cx) ex ;                (** assign types to quantified variables *)
         (** FIX: update only vars in bs *)
-        List.iter (fun (v,_,_) -> types#update ((* quant_id *) v.core) (typbot v)) bs ;
+        iter (fun (v,_,_) -> types#update ((* quant_id *) v.core) (typbot v)) bs ;
         let bs = paint_bs cx bs in
         let ex = paint_types (add_bs_ctx bs cx) ex in
-        List.iter (fun (v,_,_) -> types#remove ((* quant_id *) v.core)) bs ;      (** remove bounded variables types *)
+        iter (fun (v,_,_) -> types#remove ((* quant_id *) v.core)) bs ;      (** remove bounded variables types *)
         Quant (q, bs, ex) |> mk <<< Some Bool
     | Apply ({core = Internal op}, es) ->
         begin match op, es with
@@ -961,10 +971,10 @@ let rec paint_types cx e =
         | B.Plus, _ | B.Minus, _ | B.Times, _ | B.Ratio, _
         | B.Quotient, _ | B.Remainder, _ | B.Exp, _ | B.Uminus, _ ->
             let es = ps es in
-            apply op es (Some (if List.for_all is_int es then Int else Bot))
+            apply op es (Some (if for_all is_int es then Int else Bot))
         | B.Range, _ -> 
             let es = ps es in
-            apply op es (Some (if List.for_all is_int es then P Int else P Bot))
+            apply op es (Some (if for_all is_int es then P Int else P Bot))
         | B.Prime, [ex] -> 
             let ex = paint ex in
             apply1 op ex (typ ex)
@@ -993,7 +1003,7 @@ let rec paint_types cx e =
         | B.Tail, ex :: es -> 
             let ex = paint ex in
             let es = ps es in
-            apply op (ex :: es) (Some (Tup (List.map typbot es)))
+            apply op (ex :: es) (Some (Tup (map typbot es)))
         | B.Seq, [ex] -> apply1 op (paint ex) (Some (P (Tup [])))
         | B.BSeq, _ -> apply op (ps es) (Some (Tup []))
         | B.Cat, _ -> apply op (ps es) (Some (Tup []))
@@ -1018,16 +1028,19 @@ let rec paint_types cx e =
         | _ -> 
             Util.bug "[SMT] paint_types: not supported Apply Internal"
         end
+    | Apply ({core = Opaque ("isAFcn"|"isASeq"|"isFldOf")} as op, es) -> 
+        let es = ps es in
+        Apply (op, es) |> mk <<< Some Bool
     | Apply (op, es) -> 
         let es = ps es in
         let op = paint op in
-        let t = TLAtype.apply_fcn (typbot op) (List.map typbot es) in
-        (* let top = List.fold_left (fun r t -> Fcn(t,r)) t (List.map (fun e -> typbot e) es) in *)
+        let t = TLAtype.apply_fcn (typbot op) (map typbot es) in
+        (* let top = fold_left (fun r t -> Fcn(t,r)) t (map (fun e -> typbot e) es) in *)
         Apply (op (* <<< Some top *), es) |> mk <<< Some t
     | FcnApp (f, es) -> 
         let es = ps es in
         let f = paint f in
-        let t = TLAtype.apply_fcn (typbot f) (List.map typbot es) in
+        let t = TLAtype.apply_fcn (typbot f) (map typbot es) in
         FcnApp (f, es) |> mk <<< Some t
     | List (b, es) -> List (b, ps es) |> mk <<< Some Bool
     | Internal B.TRUE
@@ -1044,10 +1057,10 @@ let rec paint_types cx e =
         Dot (r, h) |> mk <<< Some (TLAtype.get_fieldtyp h (typbot r))
     | Tuple es -> 
         let es = ps es in
-        Tuple es |> mk <<< Some (Tup (List.map typbot es))
+        Tuple es |> mk <<< Some (Tup (map typbot es))
     | Record rs -> 
-        let rs = List.map (fun (h,e) -> h, paint e) rs in
-        Record rs |> mk <<< Some (Rec (list_to_map (List.map (fun (h,e) -> (h, typbot e)) rs)))
+        let rs = map (fun (h,e) -> h, paint e) rs in
+        Record rs |> mk <<< Some (Rec (list_to_map (map (fun (h,e) -> (h, typbot e)) rs)))
     | SetOf (ex, bs) ->
         (* let typ_bs bs = 
             let rec aux = function
@@ -1068,7 +1081,7 @@ let rec paint_types cx e =
     | SetEnum [] -> e <<< Some (P Bot)
     | SetEnum es -> 
         let es = ps es in
-        SetEnum es |> mk <<< Some (P (typbot (List.hd es)))
+        SetEnum es |> mk <<< Some (P (typbot (hd es)))
     | Choose (h, d, ex) ->
         let (d,dom) = match d with 
         | Some d -> let d = paint d in (Some d, Domain d)
@@ -1076,7 +1089,7 @@ let rec paint_types cx e =
         in
         let bs = paint_bs cx [h, Unknown, dom] in
         let ex = paint_types (add_bs_ctx bs cx) ex in
-        let h,_,_ = List.hd bs in
+        let h,_,_ = hd bs in
         (* Choose (h <<< Some (TLAtype.base t), d, ex) |> mk *)
         Choose (h, d, ex) |> mk <<< typ h
     | Arrow (e1,e2) -> 
@@ -1086,26 +1099,26 @@ let rec paint_types cx e =
     | Expr.T.Fcn (bs, ex) ->
         let bs = paint_bs cx bs in
         let ex = paint_types (add_bs_ctx bs cx) ex in
-        let tbs = List.map (fun (h,_,_) -> typbot h) bs in
-        Expr.T.Fcn (bs, ex) |> mk <<< Some (List.fold_left (fun r t -> Fcn(t,r)) (typbot ex) tbs)
+        let tbs = map (fun (h,_,_) -> typbot h) bs in
+        Expr.T.Fcn (bs, ex) |> mk <<< Some (fold_left (fun r t -> Fcn(t,r)) (typbot ex) tbs)
     | Except (f, exs) -> 
         let f = paint f in
         let paint_ex = function Except_apply ea -> Except_apply (paint ea) | Except_dot h -> Except_dot h in
-        let exs = List.map (fun (es,ex) -> List.map paint_ex es, paint ex) exs in
+        let exs = map (fun (es,ex) -> map paint_ex es, paint ex) exs in
         Except (f, exs) |> mk <<< typ f
     | Rect rs ->
-        let rs = List.map (fun (h,e) -> h,paint e) rs in
-        Rect rs |> mk <<< Some (P (Rec (list_to_map (List.map (fun (h,e) -> (h, typbase e)) rs))))
+        let rs = map (fun (h,e) -> h,paint e) rs in
+        Rect rs |> mk <<< Some (P (Rec (list_to_map (map (fun (h,e) -> (h, typbase e)) rs))))
     | Product es -> 
         let es = ps es in
-        Product es |> mk <<< Some (P (Tup (List.map (fun e -> typbase e) es)))
+        Product es |> mk <<< Some (P (Tup (map (fun e -> typbase e) es)))
     | If (c, t, f) -> 
         let c = paint c in
         let t = paint t in
         let f = paint f in
         If (c, t, f) |> mk <<< Some (if typ_eq t f then typbot t else Bot)
     | Case (es, o) ->
-        let es = List.map (fun (p,e) -> paint p, paint e) es in
+        let es = map (fun (p,e) -> paint p, paint e) es in
         let o = match o with Some o -> Some (paint o) | None -> None in
         Case (es, o) |> mk
     | Sequent seq -> paint (unroll_seq seq)
@@ -1116,7 +1129,7 @@ let rec paint_types cx e =
                 | ({core = h},_) :: xs -> ((Flex ((* quant_id *) h |> mk)) |> mk) :: new_ctx_vars xs
                 | [] -> []
             in  
-            List.rev (new_ctx_vars xs) @ cx
+            rev (new_ctx_vars xs) @ cx
         in
         Lambda (xs, paint_types (add_to_ctx cx xs) ex) |> mk
     | _ -> 
@@ -1137,7 +1150,7 @@ and paint_bs cx bs =
         let t = tfind3 v ((* quant_id *) v.core) in
         (v <<<< t, k, d)
     in
-    List.map f (unditto bs)
+    map f (unditto bs)
 ;;
 
 let indent = ref 0 ;;
@@ -1145,7 +1158,7 @@ let indent = ref 0 ;;
 (* let rec typetree cx e =    
 (* Util.eprintf "Paint %a" (print_prop ()) (opaque cx e) ; *)
     let styp e = match typ e with Some t -> TLAtype.to_string t | None -> "____" in
-    let ps es = List.iter (typetree cx) es in
+    let ps es = iter (typetree cx) es in
     let ind = String.map (fun _ -> Char.chr(32)) (String.create (!indent * 2)) in
     let inc () = indent := !indent + 1 in
     let dec () = indent := !indent - 1 in
@@ -1154,7 +1167,7 @@ let indent = ref 0 ;;
         | (v, k, Domain d) -> Util.eprintf "%s|  %s : %s  \\in  %a : %s" ind v.core (styp v) (print_prop ()) (opaque cx d) (styp d) ;
         | (v, _, _)        -> Util.eprintf "%s|  %s : %s" ind v.core (styp v)
         in
-        List.iter f bs
+        iter f bs
     in
     match e.core with
     | Ix n      -> 
@@ -1167,9 +1180,9 @@ let indent = ref 0 ;;
         | Quant (q, bs, ex)          -> 
             inc () ; 
             typetree_bs cx bs ;
-            List.iter (fun (v,_,_) -> types#update ((* quant_id *) v.core) (typbot v)) bs ;
+            iter (fun (v,_,_) -> types#update ((* quant_id *) v.core) (typbot v)) bs ;
             typetree (add_bs_ctx bs cx) ex ;
-            List.iter (fun (v,_,_) -> types#remove ((* quant_id *) v.core)) bs ;
+            iter (fun (v,_,_) -> types#remove ((* quant_id *) v.core)) bs ;
             dec ()
         | Apply (f, es) 
         | FcnApp (f, es)             -> inc () ; ps (f :: es) ; dec ()
@@ -1177,16 +1190,16 @@ let indent = ref 0 ;;
         | Product es | SetEnum es    -> inc () ; ps es ; dec ()
         | Arrow (e1,e2)              -> inc () ; ps [e1;e2] ; dec ()
         | Dot (ex,_) | Parens (ex,_) -> inc () ; ps [ex] ; dec ()
-        | Record rs | Rect rs        -> inc () ; ps (List.map (fun (_,e) -> e) rs) ; dec ()
+        | Record rs | Rect rs        -> inc () ; ps (map (fun (_,e) -> e) rs) ; dec ()
         | If (c, t, f)               -> inc () ; ps [c;t;f] ; dec ()
         | Case (es, o) ->
-            let (es1,es2) = List.split es in
+            let (es1,es2) = split es in
             inc () ; ps (es1 @ es2 @ (match o with Some o -> [o] | _ -> [])) ; dec ()
         | Expr.T.Fcn (bs, ex) ->
             inc () ; typetree_bs cx bs ; typetree (add_bs_ctx bs cx) ex ; dec ()
         | Except (r, exs) ->
             let tree_exps = function Except_apply ea -> [ea] | _ -> [] in
-            ps (r :: (List.flatten (List.map (fun (exps,ex) -> List.flatten (List.map tree_exps exps) @ [ex]) exs)))
+            ps (r :: (flatten (map (fun (exps,ex) -> flatten (map tree_exps exps) @ [ex]) exs)))
         | SetSt (h, dom, ex) ->
             let bs = [h, Unknown, Domain dom] in
             inc () ; typetree_bs cx bs ; typetree (add_bs_ctx bs cx) ex ; dec ()
@@ -1200,9 +1213,127 @@ let indent = ref 0 ;;
         | Sequent seq ->
             typetree cx (unroll_seq seq)
         | Lambda (vs, ex) -> 
-            let vs = List.fold_right (fun (h,s) r -> match s with Shape_expr -> (h, Unknown, No_domain) :: r | Shape_op _ -> r) vs [] in
+            let vs = fold_right (fun (h,s) r -> match s with Shape_expr -> (h, Unknown, No_domain) :: r | Shape_op _ -> r) vs [] in
             typetree (add_bs_ctx vs cx) ex
         | _ -> 
             ()
         end
 ;; *)
+
+(****************************************************************************)
+
+let ( <<< ) (e:'a Property.wrapped) prop : 'a Property.wrapped = 
+(* Util.eprintf "%a <<< %s" (print_prop ()) e prop.rep ; *)
+    assign e prop () ;;
+
+let rec boolify e =
+(* Util.eprintf "## boolify: %a" (print_prop ()) e ; *)
+  let mk x = { e with core = x } in
+  begin match e.core with
+  | Ix _ | Opaque _ -> 
+      (* Printf.eprintf "-- boolified!\n"; *)
+      e <<< applyu2bool
+  | Apply ({core = Ix _ | Opaque _} as f, es) ->    (** FIX primes *)
+      (* Printf.eprintf "-- boolified!\n"; *)
+      Apply (nboo f, map nboo es) |> mk <<< applyu2bool
+  | FcnApp (f,es) -> 
+      (* Printf.eprintf "-- boolified!\n"; *)
+      FcnApp (nboo f, map nboo es) |> mk <<< applyu2bool
+  | Dot (r, h) -> 
+      (* Printf.eprintf "-- boolified!\n"; *)
+      Dot (nboo r, h) |> mk <<< applyu2bool
+  | Choose (h, d, ex) -> 
+      (* Printf.eprintf "-- boolified!\n"; *)
+      Choose (h, Option.map nboo d, boolify ex) |> mk <<< applyu2bool
+  | Except (f, exs) -> 
+      (* Printf.eprintf "-- boolified!\n"; *)
+      let boo_ex = function Except_apply ea -> Except_apply (nboo ea) | Except_dot h -> Except_dot h in
+      let exs = map (fun (es,ex) -> map boo_ex es, boolify ex) exs in
+      Except (nboo f, exs) |> mk <<< applyu2bool
+  | Apply ({core = Internal o} as op, es) -> 
+      begin match o with
+      | B.Conj | B.Disj | B.Implies | B.Equiv | B.Neg ->
+          Apply (op, map boolify es) |> mk
+      | B.Mem | B.Notmem | B.Eq | B.Neq ->
+          Apply (op, map nboo es) |> mk
+      | B.Subseteq | B.Lteq | B.Lt | B.Gteq | B.Gt -> 
+          Apply (op, map nboo es) |> mk
+      | _ -> 
+          failwith "Trying to boolify a non Boolean operator."
+      end
+  | List (q, es) -> 
+      List (q, map boolify es) |> mk
+  | Quant (q, bs, ex) -> 
+      Quant (q, nboobs bs, boolify ex) |> mk
+  | Internal B.TRUE | Internal B.FALSE -> e
+
+  | If (c, t, f) -> If (boolify c, boolify t, boolify f) |> mk
+  | Case (es, o) ->
+      let es = map (fun (p,e) -> boolify p, boolify e) es in
+      Case (es, Option.map boolify o) |> mk
+  | Lambda (xs,ex) -> Lambda (xs, boolify ex) |> mk
+  | Sequent seq -> boolify (unroll_seq seq)
+  | Parens (ex,_) -> boolify ex
+  (* | Apply (op, es) -> Apply (nboo op, map nboo es) |> mk *)
+  | _ -> 
+     failwith "Trying to boolify a non Boolean operator."
+  end
+and nboo e =
+(* Util.eprintf "## not-a-boolean: %a" (print_prop ()) e ; *)
+  let mk x = { e with core = x } in
+  begin match e.core with
+  | Ix _ | Opaque _ -> e
+  | FcnApp (f, es) -> FcnApp (nboo f, map nboo es) |> mk
+  | Dot (r, h) -> Dot (nboo r, h) |> mk
+  | Apply ({core = Internal o} as op, es) -> 
+      begin match o with
+      | B.Conj | B.Disj | B.Implies | B.Equiv | B.Neg 
+      | B.Mem | B.Notmem | B.Eq | B.Neq
+      | B.Subseteq | B.Lteq | B.Lt | B.Gteq | B.Gt -> 
+          (* failwith "not expected Boolean" *)
+          boolify e
+      | B.Range -> 
+          Apply (op, map nboo es) |> mk
+      | _ -> 
+          Apply (nboo op, map nboo es) |> mk
+      end
+  | Apply (op, es) -> Apply (nboo op, map nboo es) |> mk
+  | Choose (h, d, ex) -> Choose (h, Option.map nboo d, boolify ex) |> mk
+  | Tuple es -> Tuple (map nboo es) |> mk
+  | Record rs -> Record (map (fun (h,e) -> h, nboo e) rs) |> mk
+  | SetOf (ex, bs) -> SetOf (nboo ex, nboobs bs) |> mk
+  | SetSt (h, dom, ex) -> SetSt (h, nboo dom, boolify ex) |> mk
+  | SetEnum es -> SetEnum (map nboo es) |> mk
+  | Arrow (e1,e2) -> Arrow (nboo e1, nboo e2) |> mk
+  | Expr.T.Fcn (bs, ex) -> Expr.T.Fcn (nboobs bs, nboo ex) |> mk
+  | Except (f, exs) -> 
+      let boo_ex = function Except_apply ea -> Except_apply (nboo ea) | Except_dot h -> Except_dot h in
+      let exs = map (fun (es,ex) -> map boo_ex es, nboo ex) exs in
+      Except (nboo f, exs) |> mk
+  | Rect rs -> Rect (map (fun (h,e) -> h, nboo e) rs) |> mk
+  | Product es -> Product (map nboo es) |> mk
+  | If (c, t, f) -> If (boolify c, nboo t, nboo f) |> mk
+  | Case (es, o) ->
+      let es = map (fun (p,e) -> boolify p, nboo e) es in
+      Case (es, Option.map nboo o) |> mk
+  | Lambda (xs,ex) -> Lambda (xs, boolify ex) |> mk
+  | Parens (ex,_) -> nboo ex
+  | Internal B.TRUE | Internal B.FALSE -> e
+  | Internal B.Int | Internal B.Nat | Internal B.Real -> e
+  | Internal B.Len | Internal B.Seq | Internal B.Append | Internal B.Tail | Internal B.Cat -> e
+
+  | List (q, es) -> 
+      List (q, map boolify es) |> mk
+  | Quant (q, bs, ex) -> 
+      Quant (q, nboobs bs, boolify ex) |> mk
+  | _ -> 
+     (* failwith "not expected Boolean" *)
+     e
+  end
+and nboobs bs = 
+  map 
+    begin function
+    | (v, k, Domain d) -> (v, k, Domain (nboo d))
+    | b -> b
+    end 
+  (unditto bs)

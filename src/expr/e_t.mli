@@ -8,7 +8,7 @@ open Util;;
 (** Type of bulleted lists. [And] and [Or] are the standard TLA+
     bulleted lists of 1 or more arguments. [Refs] represents a
     generic conjunction that can take 0, 1 or many arguments. The
-    0-argument case is treated as similaar (but not identical) to
+    0-argument case is treated as similar (but not identical) to
     TRUE, the 1-argument case as the same as no conjunction, and the
     many argument case as similar to [And]. *)
 type bullet  = And | Or | Refs
@@ -152,16 +152,20 @@ and hyp_ =
   | Fresh of hint * shape * kind * hdom
   | Flex of hint
   | Defn of defn * wheredef * visibility * export
-  | Fact of expr * visibility
+  | Fact of expr * visibility * time
 
 and hdom = Unbounded | Bounded of expr * visibility
 
-and wheredef = Builtin | Proof | User
+and wheredef = Builtin | Proof of time | User
 
 and export = Local | Export
 
 and visibility = Visible | Hidden
+
+and time = Now | Always | NotSet
 ;;
+
+val get_val_from_id : 'hyp Deque.dq -> int -> 'hyp;;
 
 (* fmt.ml *)
 val hyp_name : hyp_ Property.wrapped -> string;;

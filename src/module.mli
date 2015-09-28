@@ -117,3 +117,9 @@ module Parser : sig
   open T
   val parse : mule lprs
 end;;
+
+module Globalness : sig
+  open T
+  val is_global : 'a Property.wrapped -> bool
+  val globalness : mule -> mule
+end;;

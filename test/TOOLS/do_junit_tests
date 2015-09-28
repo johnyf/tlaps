@@ -3,7 +3,7 @@
 
 BASEDIR="`pwd`"
 TOOLDIR="$BASEDIR/TOOLS"
-export TLAPM="$BASEDIR/../tlapm --stretch 10 -I $BASEDIR/../library"
+export TLAPM="pkill -f cvc3 | $BASEDIR/../tlapm --stretch 10 --threads 4 -I $BASEDIR/../library"
 
 # create output folder
 juDIR=$BASEDIR/test_reports/tmp
@@ -35,7 +35,7 @@ outf=/var/tmp/ju$$.txt
     FILE="`basename $f`"
     DIR="`dirname $f`"
 
-    cmd="cd $DIR; ${TLAPM} --toolbox 0 0 --nofp --isaprove $FILE"
+    cmd="cd $DIR; ${TLAPM} --toolbox 0 0 --nofp $FILE"
     echo ""                         | tee -a $outf
     echo "+++ Running case: $FILE " | tee -a $outf
     echo "+++ working dir: "`pwd`           | tee -a $outf
@@ -50,6 +50,8 @@ outf=/var/tmp/ju$$.txt
     total=`expr $total + 1`
     totaltime=`expr $totaltime + $time`
 
+    echo "+++ time: $time"        | tee -a $outf
+    echo "+++ total time: $totaltime"        | tee -a $outf
     echo "+++ exit code: $evErr"        | tee -a $outf
 
     awk 'BEGIN { RS = "@!!BEGIN" ; FS = "\n" }

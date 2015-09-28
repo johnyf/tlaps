@@ -15,14 +15,15 @@ WellFormedMessages == \A m \in msgs :
 THEOREM WFmsgs == TypeOK => WellFormedMessages
   BY Z3 DEFS Ballot, TypeOK, Message, WellFormedMessages
 
-THEOREM Spec => []TypeOK
+THEOREM typing == Spec => []TypeOK
 <1>. USE DEFS Ballot, TypeOK  
 <1>1. Init => TypeOK
   BY SMT DEFS Init
 <1>2. TypeOK /\ [Next]_vars => TypeOK'
-  BY SMT DEFS Next, Phase1a, Phase2a, Phase1b, Phase2b, Send, Message, vars
+  PROOF OMITTED
+<1>. HIDE DEFS Ballot, TypeOK
 <1>3. QED
-  PROOF OMITTED     \* Temporal proof
+  BY <1>1,<1>2,PTL DEF Spec
 
 -----------------------------------------------------------
 
@@ -35,10 +36,10 @@ THEOREM Spec => []StructOK1
 <1>1. Init => StructOK1
   BY Z3 DEFS Init
 <1>2. TypeOK /\ StructOK1 /\ [Next]_vars => StructOK1'
-  BY WFmsgs, Z3T(5) DEFS Next, Phase1a, Phase2a, Phase1b, Phase2b, Send, votes, 
+  BY WFmsgs, Z3 DEFS Next, Phase1a, Phase2a, Phase1b, Phase2b, Send, votes, 
     WellFormedMessages, vars, Message
 <1>q. QED
-  PROOF OMITTED     \* Temporal proof
+  BY ONLY <1>1, <1>2, typing, PTL DEF Spec
 
 -----------------------------------------------------------
 
@@ -67,15 +68,14 @@ StructOK == /\ TypeOK
             /\ StructOK4 
             /\ StructOK5 
 
-THEOREM Spec => []StructOK
+THEOREM struct_lemma == Spec => []StructOK
 <1>. USE DEFS Ballot, StructOK, TypeOK, StructOK1, StructOK2, StructOK4, StructOK5
 <1>1. Init => StructOK
   BY Z3 DEFS Init
 <1>2. StructOK /\ [Next]_vars => StructOK'
-  BY WFmsgs, Z3 DEFS Next, Phase1a, Phase2a, Phase1b, Phase2b, Send, votes, 
-    WellFormedMessages, vars, Message 
+  PROOF OMITTED
 <1>3. QED
-  PROOF OMITTED     \* Temporal proof
+  BY <1>1, <1>2, PTL DEF Spec
 
 
 THEOREM Spec => []StructOK3
@@ -85,7 +85,7 @@ THEOREM Spec => []StructOK3
 <1>2. TypeOK /\ StructOK /\ [Next]_vars => StructOK3'
   PROOF OMITTED
 <1>3. QED
-  PROOF OMITTED     \* Temporal proof
+  BY ONLY <1>1, <1>2, struct_lemma, PTL DEF Spec, StructOK
 
 
 -----------------------------------------------------------------------------

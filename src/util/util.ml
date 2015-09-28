@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32215 $";;
+Revision.f "$Rev: 34678 $";;
 
 open Ext
 open Property
@@ -181,4 +181,34 @@ let temp_file (clean_hook : (unit -> unit) ref) suffix =
   in
   add_hook clean_hook f ();
   (fname, chan)
+;;
+
+(*****************************************)
+
+exception Internal_timeout;;
+
+let handler _ = raise Internal_timeout;;
+
+(* Note: we are using SIGALRM and the real-time alarm system because
+   SIGVTALRM and the virtual-time alarm system are not available on Cygwin *)
+
+let set_timer t =
+  Sys.set_signal Sys.sigalrm (Sys.Signal_handle handler);
+  ignore (Unix.setitimer Unix.ITIMER_REAL
+                         {Unix.it_interval = 0.02; Unix.it_value = t});
+;;
+
+let clear_timer () =
+  Sys.set_signal Sys.sigalrm Sys.Signal_ignore;
+  ignore (Unix.setitimer Unix.ITIMER_REAL
+                         {Unix.it_interval = 0.; Unix.it_value = 0.});
+;;
+
+let run_with_timeout tmo f x =
+  try
+    set_timer tmo;
+    let result = f x in
+    clear_timer ();
+    Some result
+  with Internal_timeout -> clear_timer (); None
 ;;

@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32595 $";;
+Revision.f "$Rev: 33188 $";;
 
 open Ext
 open Property
@@ -71,7 +71,7 @@ let at_expand prf =
     | Steps (inits, qed) -> (Steps ((replace_at inits [] prf), qed)) @@ prf
 
 
-let rec simplify cx goal prf =
+let rec simplify cx goal prf time_flag =
   Util.eprintf ~debug:"simpl" ~at:prf
     "simplify@.  %a@.  @[%a@]@.@."
     (Expr.Fmt.pp_print_expr (cx, Ctx.dot)) goal
@@ -110,8 +110,9 @@ let rec simplify cx goal prf =
         let qed_prf = assign_number (qed_prf) in
           assign (Steps (inits, {core = Qed qed_prf; props = qed_prf.props}) @@ prf) Props.orig_proof prf
     | Steps (inits, qed) ->
-        let (cx, goal, inits) = simplify_steps cx goal inits in
-        let qed_prf = simplify cx goal (get_qed_proof qed) in
+        let (cx, goal, inits, time_flag) = simplify_steps cx goal inits
+        time_flag in
+        let qed_prf = simplify cx goal (get_qed_proof qed) time_flag in
         Steps (inits, {qed with core = Qed qed_prf}) @@ prf
   in
   Util.eprintf ~debug:"simpl" ~at:prf
@@ -120,14 +121,14 @@ let rec simplify cx goal prf =
     (P_fmt.pp_print_proof (cx, Ctx.dot)) sprf ;
   sprf
 
-and simplify_steps cx goal inits = match inits with
-  | [] -> (cx, goal, [])
+and simplify_steps cx goal inits time_flag = match inits with
+  | [] -> (cx, goal, [], time_flag)
   | st :: inits ->
-      let (cx, goal, st) = simplify_step cx goal st in
-      let (cx, goal, inits) = simplify_steps cx goal inits in
-      (cx, goal, st @ inits)
+      let (cx, goal, st, time_flag) = simplify_step cx goal st time_flag in
+      let (cx, goal, inits, time_flag) = simplify_steps cx goal inits time_flag in
+      (cx, goal, st @ inits, time_flag)
 
-and simplify_step cx goal st =
+and simplify_step cx goal st time_flag =
   Util.eprintf ~debug:"simpl" ~at:st
     "simplify_step@.  %a@.  @[%t@]@.@."
     (Expr.Fmt.pp_print_expr (cx, Ctx.dot)) goal
@@ -139,7 +140,7 @@ and simplify_step cx goal st =
     | Unnamed (sn, sx) -> Named (sn, "_a" ^ nacl ^ string_of_int (Std.unique ()), false)
   end in
   let assume ?(vis=Visible) cx _ =
-    Deque.snoc cx (Fact (at_nowhere, vis) @@ st)
+    Deque.snoc cx (Fact (at_nowhere, vis, time_flag) @@ st)
   in
   let set_vis vis cx ud = match ud.core with
     | Dx n ->
@@ -157,35 +158,35 @@ and simplify_step cx goal st =
     | _ -> Errors.bug ~at:st "set_vis"
   in
   let disable = set_vis Hidden in
-  let (scx, sgoal, sts) = match st.core with
+  let (scx, sgoal, sts, time_flag) = match st.core with
     | Forget _ ->
-        (cx, goal, [st])
+        (cx, goal, [st], time_flag)
     | Assert (sq, prf) ->
         let prf =
-          let (cx, goal) =
-            P_gen.prove_assertion ~suffices:false cx goal (sq @@ st)
+          let (cx, goal, time_flag1) =
+            P_gen.prove_assertion ~suffices:false cx goal (sq @@ st) time_flag
           in
-          simplify cx goal prf
+          simplify cx goal prf time_flag1
         in
         let st = Assert (sq, prf) @@ st in
         let (cx, goal) =
-          P_gen.use_assertion ~suffices:false cx goal (sq @@ st)
+          P_gen.use_assertion ~suffices:false cx goal (sq @@ st) time_flag
         in
-        (cx, goal, [st])
+        (cx, goal, [st], time_flag)
     | Suffices (sq, prf) ->
         let prf =
           let (cx, goal) =
-            P_gen.use_assertion ~suffices:true cx goal (sq @@ st)
+            P_gen.use_assertion ~suffices:true cx goal (sq @@ st) time_flag
           in
-          simplify cx goal prf
+          simplify cx goal prf time_flag
         in
         let st = Suffices (sq, prf) @@ st in
-        let (cx, goal) =
-          P_gen.prove_assertion ~suffices:true cx goal (sq @@ st)
+        let (cx, goal, time_flag1) =
+          P_gen.prove_assertion ~suffices:true cx goal (sq @@ st) time_flag
         in
-        (cx, goal, [st])
+        (cx, goal, [st], time_flag1)
     | Use (us, onl) ->
-        let sts = match (simplify cx goal (By (us, onl) @@ st)).core with
+        let sts = match (simplify cx goal (By (us, onl) @@ st) time_flag).core with
           | Steps (inits, _) ->
               (* List.map (renumber_step (step_number stepno)) inits *)
               inits
@@ -194,29 +195,32 @@ and simplify_step cx goal st =
                          "simplifying BY does not produce a non-leaf proof!"
         in
         let cx = List.fold_left assume cx us.facts in
-        (cx, app_expr (shift (List.length us.facts)) goal, sts)
+        (cx, app_expr (shift (List.length us.facts)) goal, sts, time_flag)
     | Hide us ->
         let cx = List.fold_left disable cx us.defs in
-        (cx, goal, [Hide us @@ st])
+        (cx, goal, [Hide us @@ st], time_flag)
     | Define dfs ->
         let cx = List.fold_left begin
           fun cx df ->
-            Deque.snoc cx (Defn (df, Proof, Visible, Local) @@ st)
+            Deque.snoc cx (Defn (df, Proof time_flag, Visible, Local) @@ st)
         end cx dfs in
-        (cx, app_expr (shift (List.length dfs)) goal, [Define dfs @@ st])
+        (cx, app_expr (shift (List.length dfs)) goal, [Define dfs @@ st],
+        time_flag)
     | Have e ->
-        let (sq, qed) =
+        let (sq, qed, time_flag) =
           match expose_connective cx goal with
           | {core = Apply ({core = Internal Builtin.Implies}, [a ; b])} ->
               let sq = {
-                context = Deque.of_list [ Fact (e, Visible) @@ st ] ;
+                context = Deque.of_list [ Fact (e, Visible,
+                time_flag)  @@ st ] ;
                 active = app_expr (shift 1) b ;
               } in
               let qed = By ({ facts = [Ix 2 @@ st] ; defs = [] }, true) @@ st in
-              (sq, qed)
+              (sq, qed, time_flag)
           | gl ->
               let sq = {
-                context = Deque.of_list [ Fact (e, Visible) @@ st ];
+                context = Deque.of_list [ Fact (e, Visible,
+                time_flag)  @@ st ];
                 active = gl ;
               } in
               let msg =
@@ -225,13 +229,13 @@ and simplify_step cx goal st =
                     "which is not an implication:"
                     (Expr.Fmt.pp_print_expr (cx, Ctx.dot)) goal
               in
-              (sq, Error msg @@ st)
+              (sq, Error msg @@ st, time_flag)
         in
         let st = assign st Props.orig_step st in
         let suff = Suffices (sq, qed) @@ st in
         let suff = renumber_step (step_number stepno) suff in
         (* let suff = remove suff Props.orig_step in *)
-        simplify_step cx goal suff
+        simplify_step cx goal suff time_flag
 
     | Take bs ->
         let oldgoal = goal in
@@ -305,7 +309,7 @@ and simplify_step cx goal st =
           with Failure msg ->
             let sq =
               {context = Deque.of_list [Fact (Internal Builtin.TRUE @@ oldgoal,
-                                              Visible) @@ st ];
+                                              Visible, Now ) @@ st ];
                active = oldgoal}
             in
             Suffices (sq, Error msg @@ st) @@ st
@@ -313,7 +317,7 @@ and simplify_step cx goal st =
         let suff = renumber_step (step_number stepno) suff in
         let suff = assign suff Props.orig_step st in
         (* let suff = anonymize suff in *)
-        simplify_step cx oldgoal suff
+        simplify_step cx oldgoal suff time_flag
     | Witness es ->
         let oldgoal = goal in
         let rec instantiate aux err goal = function
@@ -423,46 +427,47 @@ and simplify_step cx goal st =
         let suff = renumber_step (step_number stepno) suff in
         let suff = assign suff Props.orig_step st in
         (* let suff = anonymize suff in *)
-        simplify_step cx oldgoal suff
+        simplify_step cx oldgoal suff time_flag
     | Pcase (e, prf) ->
-        let ass = Assert ({ context = Deque.of_list [ Fact (e, Visible) @@ st ] ;
+        let ass = Assert ({ context = Deque.of_list [ Fact (e, Visible,
+        time_flag)  @@ st ] ;
                             active = app_expr (shift 1) goal }, prf) @@ st in
         let ass = assign ass Props.orig_step st in
         let ass = renumber_step (step_number stepno) ass in
-        simplify_step cx goal ass
+        simplify_step cx goal ass time_flag
     | Pick (bs, e, prf) ->
         let ex = Quant (Exists, bs, e) @@ st in
-        let (cx, goal, asst) =
+        let (cx, goal, asst, time_flag) =
           let ass = Assert ({ context = Deque.empty ;
                               active = ex }, prf) @@ st in
-          simplify_step cx goal (salt "ex" ass)
+          simplify_step cx goal (salt "ex" ass) time_flag
         in
-        let (cx, goal, suffst) =
+        let (cx, goal, suffst, time_flag) =
           let (bs, e) = match (app_expr (shift 2) ex).core with
             | Quant (_, bs, e) -> (bs, e)
             | _ -> assert false
           in
           let scx = hyps_of bs in
-          let scx = Deque.snoc scx (Fact (e, Visible) @@ e) in
+          let scx = Deque.snoc scx (Fact (e, Visible, time_flag)  @@ e) in
           let ssq = { context = scx ;
                       active = app_expr (shift (Deque.size scx)) goal } in
           let sprf = Omitted (Elsewhere (Util.get_locus st)) @@ st in
           let suff = Suffices (ssq, sprf) @@ st in
-          simplify_step cx goal suff
+          simplify_step cx goal suff time_flag
         in
         let nsts = match asst @ suffst with
           | nst :: nsts ->
               assign nst Props.orig_step st :: nsts
           | _ -> Errors.bug ~at:st "Proof.Simplify.simplify_step/PICK"
         in
-        (cx, goal, nsts)
+        (cx, goal, nsts, time_flag)
   in
   Util.eprintf ~debug:"simpl" ~at:st
     "simplify_step (result)@\n@[<hv2>%t@ --> %t@]@.@."
     (fun ff -> ignore (P_fmt.pp_print_step (cx, Ctx.dot) ff st))
     (fun ff ->
        ignore (P_fmt.pp_print_proof (cx, Ctx.dot) ff (Steps (sts, {core = Qed (Omitted Implicit @@ st); props = st.props}) @@ st))) ;
-  (scx, sgoal, sts)
+  (scx, sgoal, sts, time_flag)
 
 and expose_connective cx goal = match goal.core with
     | Apply ({ core = Ix n }, args) -> begin

@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 31237 $";;
+Revision.f "$Rev: 33173 $";;
 
 open Ext
 open Property
@@ -442,7 +442,7 @@ and atomic_expr b = lazy begin
         use (sub_expr b) <**> optional (punct "(" >>> use (expr b) <<< punct ")")
       <$> (fun (v, e) ->
                match e with
-                 | Some ex -> Fair (Weak, v, ex)
+                 | Some ex -> Fair (Strong, v, ex)
                  | None ->
                      begin match v.core with
                        | Bang (a,sr) -> let srev = List.rev sr in
@@ -815,8 +815,9 @@ and hyp b = lazy begin locate begin
     locate (optional (hint <<< punct "::") <*> use (expr_or_sequent b))
     <$> begin
       fun le -> match le.core with
-        | (None, e) -> Fact (e, Visible)
-        | (Some l, e) -> Fact (Parens (e, Xlabel (l.core, []) @@ l) @@ le, Visible)
+        | (None, e) -> Fact (e, Visible, NotSet)
+        | (Some l, e) -> Fact (Parens (e, Xlabel (l.core, []) @@ l) @@ le,
+        Visible, NotSet)
     end ;
   ]
 end end

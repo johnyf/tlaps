@@ -2,12 +2,18 @@
 
 TLAPSVER=$(echo "tlaps-@VERSION@" | sed -e 's/ /_/g')
 TARGET="`/bin/pwd`/$TLAPSVER.tar.gz"
-echo $TARGET
+
+if test -z "${SVN_PATH}"; then
+    SVN_PATH=`svn info ../../.. | sed -n -e 's,^URL: .*repository/tla/,,p'`
+fi
 
 cat <<EOF
 
 This script builds a source distribution of the TLA+ Proof System
 version @VERSION@.
+
+Target: ${TARGET}
+SVN branch: ${SVN_PATH}
 
 EOF
 
@@ -30,12 +36,12 @@ TLAPS_DIR="/tmp/$TLAPSVER"
 rm -rf "$TLAPS_DIR"
 mkdir -p "$TLAPS_DIR"
 cd "$TLAPS_DIR"
-svn_export trunk/isabelle isabelle
-svn_export trunk/tlapm tlapm
+svn_export ${SVN_PATH}/isabelle isabelle
+svn_export ${SVN_PATH}/tlapm tlapm
 rm -rf tlapm/bugs tlapm/bugs-archive tlapm/fixed-bugs tlapm/doc
-svn_export trunk/zenon zenon
+svn_export ${SVN_PATH}/zenon zenon
 mkdir -p emacs
-svn_export trunk/misc/tla-mode emacs/tla-mode
+svn_export ${SVN_PATH}/misc/tla-mode emacs/tla-mode
 cd ..
 tar -czf "$TARGET" "$TLAPSVER"
 

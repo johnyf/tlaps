@@ -177,14 +177,15 @@ THEOREM
                PossibleNEdges == {{m, n} : m \in Connected \ {n}}
    <3>4. /\ nEdges \subseteq PossibleNEdges
          /\ IsFiniteSet(PossibleNEdges)
+         /\ Cardinality(PossibleNEdges) \in Nat
          /\ Cardinality(nEdges) \in Nat
          /\ Cardinality(nEdges) \leq Cardinality(PossibleNEdges)
      <4>1. nEdges \subseteq PossibleNEdges
        BY <3>2
      <4>2. PossibleNEdges \subseteq SUBSET Nodes
        OBVIOUS
-     <4>4. IsFiniteSet(PossibleNEdges)
-       BY <4>2, SubsetsFinite, FiniteSubset
+     <4>4. IsFiniteSet(PossibleNEdges) /\ Cardinality(PossibleNEdges) \in Nat
+       BY <4>2, SubsetsFinite, FiniteSubset, CardinalityInNat
      <4>5. IsFiniteSet(nEdges)
         BY <4>1, <4>4, FiniteSubset
      <4>6. Cardinality(nEdges) \in Nat
@@ -205,8 +206,11 @@ THEOREM
      BY <3>6, Z3 DEF IsBijection
    <3>9. NC = Cardinality(PossibleNEdges)
      BY <3>4, <3>5, CardinalityAxiom, <3>8
-   <3>10. QED
-     BY <3>4, <3>5, <3>9, <2>2a, SMT
+   <3> HIDE DEF Connected, nEdges, PossibleNEdges, NC
+   <3>10. Cardinality (nEdges) < Cardinality (Connected)
+     BY ONLY <3>4, <3>5, <3>9, <2>2a, SMT
+   <3> QED BY <3>10 DEF nEdges
+        
          (******************************************************************)
          (* WITH i <- Cardinality(nEdges),                                 *)
          (*      j <- NC = Cardinality(PossibleNEdges)                     *)
@@ -220,7 +224,21 @@ THEOREM
     <3> DEFINE CC1 == Cardinality(Connected)-1
     <3>1. /\ IsFiniteSet(1 .. CC1)
           /\ Cardinality(1 .. CC1) < Cardinality(Connected)
-      BY <2>2a, <2>4, IntervalCardinality, SMT
+      <4>1 CASE Cardinality(Connected) = 1
+        BY IntervalCardinality, <4>1
+      <4>2 CASE Cardinality(Connected) > 1
+        <5> CC1 \in Nat
+          BY <2>2a, <4>2, SMT
+        <5> IsFiniteSet(1..CC1)
+          BY IntervalCardinality
+        <5> Cardinality(1..CC1) = CC1 - 1 + 1
+          BY IntervalCardinality
+        <5> Cardinality(1..CC1) < Cardinality (Connected)
+          BY <2>2a
+        <5> QED
+          OBVIOUS
+      <4> QED
+        BY <2>4, <2>2a, <4>1, <4>2
     <3> QED
       BY <2>2a, <2>4, <2>8, <3>1, PigeonHole
   <2>10. QED

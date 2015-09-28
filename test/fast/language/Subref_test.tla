@@ -8,21 +8,21 @@ THEOREM ASSUME NEW x \in S, NEW y \in S, NEW z \in S,
                NEW j, NEW k, NEW l
         PROVE  TRUE
 <1>. "simple positional references"
-  <+>ord. "ordinary TLA+ operators"
+  <+>. "ordinary TLA+ operators"
     <+>. F == x + y
     <*>. F!<< = x
       OBVIOUS
     <*>. F!>> = y
       OBVIOUS
     <*>. QED OMITTED
-  <*>ite. "if/then/else"
+  <*>. "if/then/else"
     <+>. F == IF j THEN k ELSE l
     <*>. /\ F!1 = j
          /\ F!2 = k
          /\ F!3 = l
       OBVIOUS
     <*>. QED OMITTED
-  <*>bounds. "expressions that introduce binders"
+  <*>. "expressions that introduce binders"
     <+>. F == \A a, b \in S, c, d \in T, e, f \in U : P(a) /\ Q(b, c) /\ R(d, e, f)
          G == { P(a) /\ Q(b, c) : a, b \in S, c \in T }
          H == [ a, b \in S, c, d \in T |-> P(a) /\ R(b, c, d) ]
@@ -51,7 +51,7 @@ THEOREM ASSUME NEW x \in S, NEW y \in S, NEW z \in S,
     <*>. J!(10) = P(10) (* salt *) /\ 10 = 10
       OBVIOUS
     <*>. QED OMITTED
-  <*>enum. "set enums, tuples, records, record sets"
+  <*>. "set enums, tuples, records, record sets"
     <+>. F == {x, y, z, j, k, l}
          G == <<x, y, z, j, k, l>>
          H == [f1 : x, f2 : y, f3 : z, f4 : j, f5 : k, f6 : l]
@@ -66,7 +66,7 @@ THEOREM ASSUME NEW x \in S, NEW y \in S, NEW z \in S,
     <*>. I!1 = x /\ I!2 = y /\ I!3 = z /\ I!4 = j /\ I!5 = k /\ I!6 = l (* salt *) /\ 3 = 3
       OBVIOUS
     <*>. QED OMITTED
-  <*>let. "LET expressions"
+  <*>. "LET expressions"
     <+>. F == LET G == x + y
                   H(u) == G + u
                IN H(10) - G

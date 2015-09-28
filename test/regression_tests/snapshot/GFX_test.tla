@@ -319,7 +319,7 @@ THEOREM Invariance == Spec => []Inv
       <4> USE DEF Inv, TypeOK
       <4>1. ASSUME NEW p \in Proc, a(p)
             PROVE  TypeOK'
-        BY <4>1, <3>1, CardType, ProcFinite, SubsetFinite, SMTT(120) DEF a
+        BY <4>1, <3>1, CardType, ProcFinite, SubsetFinite, Z3 DEF a
       <4>2. ASSUME NEW p \in Proc, b(p)
             PROVE  TypeOK'
         BY <4>2, SMT DEF b
@@ -378,7 +378,7 @@ THEOREM Invariance == Spec => []Inv
           PROVE  Inv'
       <4> USE DEF Inv
       <4>1. InvB'
-        BY <3>1, <3>2, <3>5, <3>7, SMT DEF a, TypeOK, InvB
+        BY <3>1, <3>2, <3>5, <3>7, Z3 DEF a, TypeOK, InvB
       <4>2. InvC'
         <5> SUFFICES ASSUME NEW q \in Proc, Cardinality(result'[q]) > 0,
                             NEW P \in PA1'
@@ -641,7 +641,7 @@ THEOREM Invariance == Spec => []Inv
             <7>3. \A i, j \in 0..Cardinality(known'[p]) : i # j => wa[i] # wa[j]
               BY <5>2, <7>2, SMT DEF WriterAssignment
             <7>4. \A i \in 0..Cardinality(known'[p]) : wa[i] \in P[i]
-              BY <7>1, <7>2, SMT DEF InvB
+              BY <7>1, <7>2, Z3 DEF InvB
             <7>6. /\ IsFiniteSet( UNION {P[i] : i \in Nat} )
                   /\ Cardinality( UNION {P[i] : i \in Nat} ) \in Nat
               <8>1. \A i \in Nat : wa[i] # NotAProc => wa[i] \in Proc
@@ -1159,6 +1159,8 @@ THEOREM Spec => PS!Spec
 (***************************************************************************)OMITTED
 =============================================================================
 \* Modification History
+\* Last modified Wed Jan 29 16:32:19 CET 2014 by merz
+\* Last modified Wed Jan 29 16:29:57 CET 2014 by merz
 \* Last modified Tue Jun 25 15:22:24 CEST 2013 by hernanv
 \* Last modified Sat Jun 01 10:25:27 CEST 2013 by merz
 \* Last modified Fri May 31 05:07:33 PDT 2013 by lamport

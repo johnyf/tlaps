@@ -6,13 +6,16 @@
  * Copyright (C) 2011  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32095 $";;
+Revision.f "$Rev: 34678 $";;
 
 open Printf
 open Property
 
-module SMap = Map.Make (String)
+(* open Smtcommons *)
 module SSet = Set.Make (String)
+module SMap = Map.Make (String)
+(* module SMap = Smtcommons.SMap *)
+(* module SSet = Smtcommons.SSet *)
 
 let list_to_map ls = List.fold_left (fun m (fd,tp) -> SMap.add fd tp m) SMap.empty ls
 let fieldList map = List.map (fun (f,_) -> f) (SMap.bindings map)
@@ -96,7 +99,7 @@ module TLAtype =
             List.exists (fun b -> b) bs
         | Tup t1, Tup t2 -> 
             begin try List.exists2 (fun x y -> gt0 x y) t1 t2
-            with _ -> false end
+            with Not_found | Invalid_argument _ | Failure _ -> false end
         | _ -> 
             false
             
@@ -123,7 +126,7 @@ module TLAtype =
             List.exists (fun b -> b) bs
         | Tup t1, Tup t2 -> 
             begin try List.exists2 (fun x y -> gt x y) t1 t2
-            with _ -> false end
+            with Not_found | Invalid_argument _ | Failure _ -> false end
         | _ -> 
             false
 
@@ -195,7 +198,7 @@ module TLAtype =
     
     let dot t h = 
         match t with
-        | Rec rs -> begin try SMap.find h rs with _ -> Bot end
+        | Rec rs -> begin try SMap.find h rs with Not_found -> Bot end
         | _ -> Bot
     
   end
@@ -207,7 +210,7 @@ let default x t =
     | x, None -> x
 ;;
 
-let expr_type : TLAtype.t option pfuncs = Property.make (* ~uuid:"595aaaad-07ca-498b-8ebc-a473db6b0b99" *) "Backend.Smt.ExprType" ;;
+let expr_type : TLAtype.t option pfuncs = Property.make "Backend.Smt.ExprType" ;;
 let remove_type e = remove e expr_type ;;
 let has_type e = has e expr_type ;;
 let typ e = if has e expr_type then get e expr_type else None ;;
@@ -221,6 +224,8 @@ let assign_type e t =
     assign e expr_type t ;;
 let (<<<) e (* (e:Expr.T.expr) *) t = assign_type e t ;;
 
+let is_Bool e = typbot e = Bool ;;    
+let is_Int e = typbot e = Int ;;    
 
 module TLAtypeMap = Map.Make (TLAtype)
 
@@ -276,126 +281,3 @@ class types = object (self)
         SMap.iter add_aux m ;
         !tlamap
 end
-
-
-
-
-
-(**************************************************************************)
-(*                                                                        *)
-(*  Copyright (C) Jean-Christophe Filliatre                               *)
-(*                                                                        *)
-(*  This software is free software; you can redistribute it and/or        *)
-(*  modify it under the terms of the GNU Library General Public           *)
-(*  License version 2.1, with the special exception on linking            *)
-(*  described in file LICENSE.                                            *)
-(*                                                                        *)
-(*  This software is distributed in the hope that it will be useful,      *)
-(*  but WITHOUT ANY WARRANTY; without even the implied warranty of        *)
-(*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.                  *)
-(*                                                                        *)
-(**************************************************************************)
-
-(* Persistent union-find = Tarjan's algorithm with persistent arrays *)
-
-(* persistent arrays; see the module [Parray] for explanations *)
-module Pa = struct
-
-  type t = data ref
-  and data =
-    | Array of int array 
-    | Diff of int * int * t
-        
-  let create n v = ref (Array (Array.create n v))
-  let init n f = ref (Array (Array.init n f))
-    
-  (* reroot t ensures that t becomes an Array node *)
-  let rec reroot t = match !t with
-    | Array _ -> ()
-    | Diff (i, v, t') -> 
-        reroot t';
-        begin match !t' with
-          | Array a as n ->
-              let v' = a.(i) in
-              a.(i) <- v;
-              t := n;
-              t' := Diff (i, v', t)
-          | Diff _ -> assert false
-        end
-  
-  let rec rerootk t k = match !t with
-    | Array _ -> k ()
-    | Diff (i, v, t') -> 
-        rerootk t' (fun () -> begin match !t' with
-                      | Array a as n ->
-                          let v' = a.(i) in
-                          a.(i) <- v;
-                          t := n;
-                          t' := Diff (i, v', t)
-                      | Diff _ -> assert false end; k())
-
-  let reroot t = rerootk t (fun () -> ())
-
-  let rec get t i = match !t with
-    | Array a -> 
-        a.(i)
-    | Diff _ -> 
-        reroot t; 
-        begin match !t with Array a -> a.(i) | Diff _ -> assert false end
-      
-  let set t i v = 
-    reroot t;
-    match !t with
-      | Array a as n ->
-          let old = a.(i) in
-          if old == v then
-            t
-          else begin
-            a.(i) <- v;
-            let res = ref n in
-            t := Diff (i, old, res);
-            res
-          end
-      | Diff _ ->
-          assert false
-
-end
-
-(* Tarjan's algorithm *)
-
-type t = { 
-  mutable father: Pa.t; (* mutable to allow path compression *)
-  c: Pa.t; (* ranks *)
-}
-      
-let create n = 
-  { c = Pa.create n 0;
-    father = Pa.init n (fun i -> i) }
-    
-let rec find_aux f i = 
-  let fi = Pa.get f i in
-  if fi == i then 
-    f, i
-  else 
-    let f, r = find_aux f fi in 
-    let f = Pa.set f i r in
-    f, r
-      
-let find h x = 
-  let f,rx = find_aux h.father x in h.father <- f; rx
-  
-let union h x y = 
-  let rx = find h x in
-  let ry = find h y in
-  if rx != ry then begin
-    let rxc = Pa.get h.c rx in
-    let ryc = Pa.get h.c ry in
-    if rxc > ryc then
-      { h with father = Pa.set h.father ry rx }
-    else if rxc < ryc then
-      { h with father = Pa.set h.father rx ry }
-    else
-      { c = Pa.set h.c rx (rxc + 1);
-        father = Pa.set h.father ry rx }
-  end else
-    h

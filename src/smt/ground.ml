@@ -6,7 +6,7 @@
  * Copyright (C) 2011-2012  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32604 $";;
+Revision.f "$Rev: 34678 $";;
 
 open Ext
 open Property
@@ -16,6 +16,7 @@ open Expr.Subst
 open Expr.Visit
 
 open Printf
+open List
 
 open Typesystem
 open Smtcommons
@@ -41,30 +42,30 @@ let is_Int e = typbot e = Int ;;
 let rec choose k l =
   if k = 0 then [ [] ]
   else
-    let len = List.length l in
+    let len = length l in
     if len < k then []
     else if k = len then [ l ]
          else
          match l with
          h :: t ->
             let starting_with_h =
-                (List.map (fun sublist -> h :: sublist) (choose (pred k) t))
+                (map (fun sublist -> h :: sublist) (choose (pred k) t))
             in
             let not_starting_with_h = choose k t in
             starting_with_h @ not_starting_with_h
          | [] -> assert false
 ;;
 
-let all_perms xs = List.flatten (List.mapi (fun i _ -> choose i xs) xs) @ [xs] ;;
+let all_perms xs = flatten (mapi (fun i _ -> choose i xs) xs) @ [xs] ;;
 
 (****************************************************************************)
 
-let flatten_conj e = 
+(* let flatten_conj e = 
     let rec collect_conj e = match e.core with
     | Apply ({core = Internal B.Conj}, [e1 ; e2]) -> 
         collect_conj e1 @ collect_conj e2
     | List (And, es) -> 
-        List.flatten (List.map collect_conj es)
+        flatten (map collect_conj es)
     | _ -> [e]
     in
     match e.core with
@@ -72,7 +73,7 @@ let flatten_conj e =
         begin match filter_true (collect_conj e) with
         | [] -> Internal B.TRUE @@ e
         | ex :: [] -> if is_conc e then assign ex isconc () else ex
-        | es -> if List.exists (fun e -> 
+        | es -> if exists (fun e -> 
                     match e.core with Internal B.FALSE -> true | _ -> false) es 
                     then Internal B.FALSE @@ e else (List (And, es) @@ e)
         end
@@ -84,7 +85,7 @@ let flatten_disj e =
     | Apply ({core = Internal B.Disj}, [e1 ; e2]) -> 
         collect_disj e1 @ collect_disj e2
     | List (Or, es) -> 
-        List.flatten (List.map collect_disj es)
+        flatten (map collect_disj es)
     | _ -> [e]
     in
     match e.core with
@@ -92,11 +93,15 @@ let flatten_disj e =
         begin match filter_false (collect_disj e) with
         | [] -> Internal B.FALSE @@ e
         | ex :: [] -> if is_conc e then assign ex isconc () else ex
-        | es -> if List.exists (fun e -> 
+        | es -> if exists (fun e -> 
                     match e.core with Internal B.TRUE -> true | _ -> false) es 
                     then Internal B.TRUE @@ e else (List (Or, es) @@ e)
         end
     | _ -> e
+;; *)
+
+let str_is_int x =
+  try ignore (int_of_string x); true with Invalid_argument _ -> false
 ;;
 
 (** Simplify trivialities, flatten conj/disjunctions *)
@@ -115,8 +120,9 @@ let rec gr0 e =
     let apply2b op e1 e2 = Apply (Internal op |> mc <<< Some Bool, [e1 ; e2]) |> mc  <<< Some Bool in
     let eq x y      = apply2b B.Eq x y in
     let neg x       = apply1b B.Neg x in
-    let str_is_int x = try int_of_string x = int_of_string x with _ -> false in
-    let str_is_nat x = try int_of_string x >= 0 with _ -> false in
+    let str_is_nat x =
+      try int_of_string x >= 0 with Invalid_argument _ -> false
+    in
     let mk_num n = Num (string_of_int n,"") |> mc <<< Some Int in
     let rec range2set a b = if a <= b then (Num (string_of_int a,"") |> mc <<< Some Int) :: range2set (a+1) b else [] in
     let setminus x y = Apply (Internal B.Setminus |> mc, [x ; y]) |> mk in
@@ -124,8 +130,8 @@ let rec gr0 e =
     let zero = Num ("0","") |> mc <<< Some Int in
     match e.core with
     | List (_, [e]) -> gr0 (build e)
-    | List (And, es) -> lAnd (List.map gr0 es)
-    | List (Or, es) -> lOr (List.map gr0 es)
+    | List (And, es) -> lAnd (map gr0 es)
+    | List (Or, es) -> lOr (map gr0 es)
     | Apply ({core = Internal op}, [x ; y]) -> 
         let x = gr0 x in
         let y = gr0 y in
@@ -144,13 +150,13 @@ let rec gr0 e =
         | B.Cap, _, SetEnum [] -> y
         | B.Cap, SetEnum [], _ -> x
         | B.Cap, SetEnum es, SetEnum fs -> 
-            SetEnum (List.fold_left (fun r e -> if List.exists (Expr.Eq.expr e) fs then e :: r else r) [] es) |> mk
+            SetEnum (fold_left (fun r e -> if exists (Expr.Eq.expr e) fs then e :: r else r) [] es) |> mk
         | B.Setminus, _, SetEnum [] -> x
         | B.Setminus, SetEnum [], _ -> x
         | B.Setminus, SetEnum a, SetEnum b -> 
-            let a_cap_b = List.fold_left (fun r e -> if List.exists (Expr.Eq.expr e) b then e :: r else r) [] a in
-            let a = List.fold_left (fun r e -> if List.exists (Expr.Eq.expr e) a_cap_b then r else e :: r) [] a in
-            let b = List.fold_left (fun r e -> if List.exists (Expr.Eq.expr e) a_cap_b then r else e :: r) [] b in
+            let a_cap_b = fold_left (fun r e -> if exists (Expr.Eq.expr e) b then e :: r else r) [] a in
+            let a = fold_left (fun r e -> if exists (Expr.Eq.expr e) a_cap_b then r else e :: r) [] a in
+            let b = fold_left (fun r e -> if exists (Expr.Eq.expr e) a_cap_b then r else e :: r) [] b in
             (if b = [] then SetEnum a |> mk else setminus (SetEnum a |> mk) (SetEnum b |> mk))
         | B.Setminus, Apply ({core = Internal B.Setminus}, [({core = SetEnum _} as x) ; s]), SetEnum _ -> 
             setminus (gr0 (setminus x y)) s
@@ -163,11 +169,13 @@ let rec gr0 e =
         | (B.Eq | B.Equiv), Internal B.FALSE, _ when is_Bool y -> gr0 (neg y)
         | B.Eq, Num (n,""), Num (m,"") -> if n = m then tla_true else tla_false 
         | B.Eq, String s1, String s2 -> if s1 = s2 then tla_true else tla_false
-        | B.Eq, Tuple t1, Tuple t2 (* when List.length t1 = List.length t2 *) -> 
-            (* let l = try List.combine t1 t2 with _ -> [tla_true,tla_false] in *)
-            (* let l = List.combine t1 t2 in
-            lAnd (List.map (fun (x,y) -> eq x y) l) *)
-            begin try lAnd (List.map (fun (x,y) -> eq x y) (List.combine t1 t2)) with _ -> tla_false end
+        | B.Eq, Tuple t1, Tuple t2 (* when length t1 = length t2 *) -> 
+            (* let l = try combine t1 t2 with Invalid_argument _ -> [tla_true,tla_false] in *)
+            (* let l = combine t1 t2 in
+            lAnd (map (fun (x,y) -> eq x y) l) *)
+            begin try lAnd (map (fun (x,y) -> eq x y) (combine t1 t2))
+            with Invalid_argument _ -> tla_false
+            end
         (* | B.Eq, _, (Ix _ | Apply ({core = Internal B.Prime}, [{core = Ix _}])) 
             when (match x.core with Ix _ | Apply ({core = Internal B.Prime}, [{core = Ix _}]) -> false | _ -> true) -> eq y x *)
 
@@ -182,10 +190,18 @@ let rec gr0 e =
         | B.Ratio,     Num (x,""), Num (y,"") when str_is_int x && str_is_int y && int_of_string y <> 0 ->
                                                                                    Num (string_of_float' ((float_of_string x) /. (float_of_string y)),"") |> mk
         | B.Exp,       Num (x,""), Num (y,"") when str_is_int x && str_is_int y -> Num (string_of_float' ((float_of_string x) ** (float_of_string y)),"") |> mk
-        | B.Lt,        Num (x,""), Num (y,"") when str_is_int x && str_is_int y -> if (try (int_of_string x) <  (int_of_string y) with _ -> false) then tla_true else tla_false
-        | B.Lteq,      Num (x,""), Num (y,"") when str_is_int x && str_is_int y -> if (try (int_of_string x) <= (int_of_string y) with _ -> false) then tla_true else tla_false
-        | B.Gt,        Num (x,""), Num (y,"") when str_is_int x && str_is_int y -> if (try (int_of_string y) <  (int_of_string x) with _ -> false) then tla_true else tla_false
-        | B.Gteq,      Num (x,""), Num (y,"") when str_is_int x && str_is_int y -> if (try (int_of_string y) <= (int_of_string x) with _ -> false) then tla_true else tla_false
+        | B.Lt,        Num (x,""), Num (y,"") when str_is_int x && str_is_int y
+        -> if (int_of_string x) <  (int_of_string y)
+           then tla_true else tla_false
+        | B.Lteq,      Num (x,""), Num (y,"") when str_is_int x && str_is_int y
+        -> if (int_of_string x) <= (int_of_string y)
+           then tla_true else tla_false
+        | B.Gt,        Num (x,""), Num (y,"") when str_is_int x && str_is_int y
+        -> if (int_of_string y) <  (int_of_string x)
+           then tla_true else tla_false
+        | B.Gteq,      Num (x,""), Num (y,"") when str_is_int x && str_is_int y
+        -> if (int_of_string y) <= (int_of_string x)
+           then tla_true else tla_false
 
         (** Repeated in gr_arith ; for Fof use *)
         | (B.Plus | B.Minus), _, Num ("0","") when is_Int x -> build x
@@ -213,11 +229,11 @@ let rec gr0 e =
         | B.Neg, Apply ({core = Internal B.Neg}, [x]) when is_Bool x -> build x
         | B.Uminus, Num (n,"") -> Num ("-"^n,"") @@ ex
         | B.Tail, Tuple [] -> Tuple [] |> mk
-        (* | B.SUBSET, SetEnum es -> SetEnum (List.map (fun xs -> SetEnum xs |> mk) (all_perms es)) |> mk *)
+        (* | B.SUBSET, SetEnum es -> SetEnum (map (fun xs -> SetEnum xs |> mk) (all_perms es)) |> mk *)
         | _ -> Apply (o, [ex]) |> mk
         end
     | Apply (f, es) -> 
-        Apply (gr0 f, List.map gr0 es) |> mk
+        Apply (gr0 f, map gr0 es) |> mk
     | Quant (q, bs, ex) -> 
         let ex = gr0 ex in
         begin match q, bs, ex.core with
@@ -237,27 +253,27 @@ let rec gr0 e =
         | Internal B.FALSE -> build f
         | _ -> If (c,t,f) |> mk
         end
-    | FcnApp (f, es)    -> FcnApp (gr0 f, List.map gr0 es) |> mk
+    | FcnApp (f, es)    -> FcnApp (gr0 f, map gr0 es) |> mk
     | Dot (r, h)        -> Dot (gr0 r, h) |> mk
-    | Tuple es          -> Tuple (List.map gr0 es) |> mk
-    | Record rs         -> Record (List.map (fun (h,e) -> h, gr0 e) rs) |> mk
+    | Tuple es          -> Tuple (map gr0 es) |> mk
+    | Record rs         -> Record (map (fun (h,e) -> h, gr0 e) rs) |> mk
     | SetOf (ex, bs)    -> SetOf (gr0 ex, gr0_bs bs) |> mk
     | SetSt (h, dom, p) -> SetSt (h, gr0 dom, gr0 p) |> mk
-    | SetEnum es        -> SetEnum (List.map gr0 es) |> mk
+    | SetEnum es        -> SetEnum (map gr0 es) |> mk
     | Arrow (x, y)      -> Arrow (gr0 x, gr0 y) |> mk
-    | Rect es           -> Rect (List.map (fun (h,e) -> h, gr0 e) es) |> mk
-    | Product es        -> Product (List.map gr0 es) |> mk
+    | Rect es           -> Rect (map (fun (h,e) -> h, gr0 e) es) |> mk
+    | Product es        -> Product (map gr0 es) |> mk
     | Expr.T.Fcn (bs, ex) -> Expr.T.Fcn (gr0_bs bs, gr0 ex) |> mk
     | Except (f, exs) ->
         let gr0_ex = function Except_apply ea -> Except_apply (gr0 ea) | Except_dot h -> Except_dot h in
-        let exs = List.map (fun (es,ex) -> List.map gr0_ex es, gr0 ex) exs in
+        let exs = map (fun (es,ex) -> map gr0_ex es, gr0 ex) exs in
         Except (gr0 f, exs) |> mk
     | Sequent seq -> gr0 (unroll_seq seq)
     | Parens (ex,_) -> gr0 (build ex)
     | Choose (h, Some d, ex) -> Choose (h, Some (gr0 d), gr0 ex) |> mk
     | Choose (h, None, ex) -> Choose (h, None, gr0 ex) |> mk
     | Case (es, o) ->
-        let es = List.map (fun (p,e) -> gr0 p, gr0 e) es in
+        let es = map (fun (p,e) -> gr0 p, gr0 e) es in
         let o = match o with Some o -> Some (gr0 o) | None -> None in
         Case (es, o) |> mk
     | Lambda (xs, ex) -> Lambda (xs, gr0 ex) |> mk
@@ -266,7 +282,7 @@ and gr0_bs bs =
     let faux = function
     | (v, k, Domain d) -> (v, k, Domain (gr0 d))
     | b -> b
-    in List.map faux bs
+    in map faux bs
 ;;
 
 (** Arithmetic *)
@@ -275,15 +291,16 @@ let rec gr_arith e =
     let mk x = { e with core = x } in    
     let build ex = match ex.core with a -> a |> mk in    (** mantains e's original properties, especially the isconc property *)
     let mc x = if is_conc e then assign (noprops x) isconc () else noprops x in
-    let lAnd es = List (And, es) |> mc <<< Some Bool in
+    (* let lAnd es = List (And, es) |> mc <<< Some Bool in *)
     let tla_true  = Internal B.TRUE |> mc <<< Some Bool in
     let apply2' op e1 e2 = Apply (op, [e1;e2]) |> mc in
-    let mem x y     = apply2' (Internal B.Mem |> mc <<< Some Bool) x y <<< Some Bool in
+    (* let mem x y     = apply2' (Internal B.Mem |> mc <<< Some Bool) x y <<< Some Bool in *)
     let leq x y     = apply2' (Internal B.Lteq |> mc <<< Some Bool) x y <<< Some Bool in
     let lt x y      = apply2' (Internal B.Lt |> mc <<< Some Bool) x y <<< Some Bool in
     let plus x y    = apply2' (Internal B.Plus |> mc <<< Some Int) x y <<< Some Int in
     let minus x y   = apply2' (Internal B.Minus |> mc <<< Some Int) x y <<< Some Int in
     let zero = Num ("0","") |> mc <<< Some Int in
+    let string_of_float' x = Str.replace_first (Str.regexp "^\\(.*\\)\\.$") "\\1" (string_of_float x) in
     match e.core with
     | Apply ({core = Internal op} as o, [x ; y]) -> 
         let x = gr_arith x in
@@ -296,24 +313,37 @@ let rec gr_arith e =
         | B.Plus, Num ("0",""), _ when is_Int y -> build y
         | B.Minus, Num ("0",""), _ when is_Int y -> Apply (Internal B.Uminus |> mc, [y]) |> mk
 
+        (** Trivial arithmetic rules, no context needed *)
+        | B.Plus,      Num (x,""), Num (y,"") when str_is_int x && str_is_int y -> mk_num ((int_of_string x) + (int_of_string y))
+        | B.Minus,     Num (x,""), Num (y,"") when str_is_int x && str_is_int y -> mk_num ((int_of_string x) - (int_of_string y))
+        | B.Times,     Num (x,""), Num (y,"") when str_is_int x && str_is_int y -> mk_num ((int_of_string x) * (int_of_string y))
+        | B.Quotient,  Num (x,""), Num (y,"") when str_is_int x && str_is_int y && int_of_string y > 0 -> 
+                                                                                   mk_num ((int_of_string x) / (int_of_string y)) (* integer division *)
+        | B.Remainder, Num (x,""), Num (y,"") when str_is_int x && str_is_int y && int_of_string y > 0 -> 
+                                                                                   mk_num ((int_of_string x) mod (int_of_string y))
+        | B.Ratio,     Num (x,""), Num (y,"") when str_is_int x && str_is_int y && int_of_string y <> 0 ->
+                                                                                   Num (string_of_float' ((float_of_string x) /. (float_of_string y)),"") |> mk
+        | B.Exp,       Num (x,""), Num (y,"") when str_is_int x && str_is_int y -> Num (string_of_float' ((float_of_string x) ** (float_of_string y)),"") |> mk
+
+
         | B.Minus, _, _ when is_Int x && is_Int y && Expr.Eq.expr x y -> zero
         | B.Lteq, _, _  when is_Int x && is_Int y && Expr.Eq.expr x y -> tla_true
         | B.Gteq, _, _  when is_Int x && is_Int y && Expr.Eq.expr x y -> tla_true
 
         | B.Lteq, Apply ({core = Internal B.Plus}, [x ; y]), Apply ({core = Internal B.Plus}, [z ; w]) 
-            when List.for_all is_Int [x;y;z;w] && Expr.Eq.expr x z -> leq y w
+            when for_all is_Int [x;y;z;w] && Expr.Eq.expr x z -> leq y w
         | B.Lteq, Apply ({core = Internal B.Plus}, [x ; y]), Apply ({core = Internal B.Plus}, [z ; w]) 
-            when List.for_all is_Int [x;y;z;w] && Expr.Eq.expr y w -> leq x z
+            when for_all is_Int [x;y;z;w] && Expr.Eq.expr y w -> leq x z
         | B.Lteq, Apply ({core = Internal B.Plus}, [x ; y]), Apply ({core = Internal B.Plus}, [z ; w]) 
-            when List.for_all is_Int [x;y;z;w] && Expr.Eq.expr x w -> leq y z
+            when for_all is_Int [x;y;z;w] && Expr.Eq.expr x w -> leq y z
         | B.Lteq, Apply ({core = Internal B.Plus}, [x ; y]), Apply ({core = Internal B.Plus}, [z ; w]) 
-            when List.for_all is_Int [x;y;z;w] && Expr.Eq.expr y z -> leq x w
+            when for_all is_Int [x;y;z;w] && Expr.Eq.expr y z -> leq x w
 
         (** algebraic manipulation, recursive *)
         | (B.Lteq | B.Gteq), _, Apply ({core = Internal B.Minus}, [z ; w]) 
-            when List.for_all is_Int [x;z;w] -> gr_arith (Apply (o, [plus x w ; z]) @@ e)
+            when for_all is_Int [x;z;w] -> gr_arith (Apply (o, [plus x w ; z]) @@ e)
         | (B.Lteq | B.Gteq), Apply ({core = Internal B.Minus}, [z ; w]), _ 
-            when List.for_all is_Int [y;z;w] -> gr_arith (Apply (o, [z ; plus y w]) @@ e)
+            when for_all is_Int [y;z;w] -> gr_arith (Apply (o, [z ; plus y w]) @@ e)
 
         (* | B.Plus, x, y -> 
             let uminus1 e = match e.core with
@@ -322,7 +352,7 @@ let rec gr_arith e =
             | Num (n,"") -> Num ("-"^n,"") |> mc <<< Some Int
             | _ -> Apply (Internal B.Uminus, [e]) |> mk
             in
-            let uminus es = List.map uminus1 es in
+            let uminus es = map uminus1 es in
             let rec to_add e = 
               match e.core with
               | Apply ({core = Internal o}, [x ; y]) -> 
@@ -335,26 +365,17 @@ let rec gr_arith e =
             in
            
             let xs = to_add e in
-            let nums,xs = List.partition (fun e -> match e.core with Num _ -> true | _ -> false) xs in
+            let nums,xs = partition (fun e -> match e.core with Num _ -> true | _ -> false) xs in
             let xs = order xs in
             let xs = simplify xs in
             to_expr xs *)
 
-        | B.Minus, Apply ({core = Internal B.Plus},  [x ; z]), _ when List.for_all is_Int [x;y;z] && Expr.Eq.expr x y -> gr_arith z
-        | B.Minus, Apply ({core = Internal B.Plus},  [z ; x]), _ when List.for_all is_Int [x;y;z] && Expr.Eq.expr x y -> gr_arith z
-        | B.Plus,  Apply ({core = Internal B.Minus}, [x ; z]), _ when List.for_all is_Int [x;y;z] && Expr.Eq.expr z y -> gr_arith x
-        | B.Plus,  _, Apply ({core = Internal B.Minus}, [y ; z]) when List.for_all is_Int [x;y;z] && Expr.Eq.expr x z -> gr_arith y
-
-      (* removed by Damien because of infinite loops.
-         examples:
-         1 + (2 + 3) -> 2 + (1 + 3) -> 1 + (2 + 3) -> ...
-         1 + (2 + 3) -> 3 + (1 + 2) -> 2 + (3 + 1) -> 1 + (2 + 3) -> ...
-         (x + 1) - 2 -> x + (1 - 2) -> (x + 1) - 2 -> ...
-         (x - 1) - 2 -> x - (1 + 2) -> (x - 1) - 2 -> ...
-         (1 - 2) - 3 -> (1 - 3) - 2 -> (1 - 2) - 3 -> ...
+        | B.Minus, Apply ({core = Internal B.Plus},  [x ; z]), _ when for_all is_Int [x;y;z] && Expr.Eq.expr x y -> gr_arith z
+        | B.Minus, Apply ({core = Internal B.Plus},  [z ; x]), _ when for_all is_Int [x;y;z] && Expr.Eq.expr x y -> gr_arith z
+        | B.Plus,  Apply ({core = Internal B.Minus}, [x ; z]), _ when for_all is_Int [x;y;z] && Expr.Eq.expr z y -> gr_arith x
+        | B.Plus,  _, Apply ({core = Internal B.Minus}, [y ; z]) when for_all is_Int [x;y;z] && Expr.Eq.expr x z -> gr_arith y
 
         (** number simpl *)
-
         | B.Plus,  Apply ({core = Internal B.Plus}, [ex ; ({core = Num _} as x)]), Num _
         | B.Plus,  Apply ({core = Internal B.Plus}, [({core = Num _} as x) ; ex]), Num _ when is_Int ex -> gr_arith (plus ex (gr_arith (plus x y)))
         | B.Plus,  Num _, Apply ({core = Internal B.Plus},  [ex ; ({core = Num _} as y)])
@@ -373,7 +394,6 @@ let rec gr_arith e =
         (* | B.Minus, Num _, Apply ({core = Internal B.Plus},  [({core = Num _} as y) ; ex]) -> gr_arith (minus (gr_arith (minus x y)) ex) *)
         (* | B.Minus, Num _, Apply ({core = Internal B.Minus}, [ex ; ({core = Num _} as y)]) -> gr_arith (minus (gr_arith (plus x y)) ex) *)
         (* | B.Minus, Num _, Apply ({core = Internal B.Minus}, [({core = Num _} as y) ; ex]) -> gr_arith (plus ex (gr_arith (minus x y))) *)
-      *)
 
         (** structural *)
         | B.Plus,  _, Apply ({core = Internal B.Minus}, [y ; z]) when is_Int x && is_Int y && is_Int z -> gr_arith (minus (plus x y) z)
@@ -389,11 +409,11 @@ let rec gr_arith e =
         | B.Plus, Num (n,""), _  when is_Int y && is_neg n -> gr_arith (minus y (abs n) )
         | B.Minus, _, Num (n,"") when is_Int x && is_neg n -> gr_arith (plus  x (abs n) )
 
-        | B.Mem, Apply ({core = Internal B.Plus}, [a ; b]), (Internal B.Int | Internal B.Nat) -> 
+(*         | B.Mem, Apply ({core = Internal B.Plus}, [a ; b]), (Internal B.Int | Internal B.Nat) -> 
             gr_arith (lAnd [mem a y ; mem b y])
         | B.Mem, Apply ({core = Internal (B.Minus | B.Times | B.Exp) }, [a ; b]), Internal B.Int -> 
             gr_arith (lAnd [mem a y ; mem b y])
-
+ *)
         | _ -> Apply (o, [x ; y]) |> mk
         end
     | Apply ({core = Internal B.Neg}, [{core = Apply ({core = Internal B.Lteq}, [x ; y])}]) -> lt y x |> gr_arith
@@ -401,30 +421,30 @@ let rec gr_arith e =
     | Apply ({core = Internal B.Neg}, [{core = Apply ({core = Internal B.Gteq}, [x ; y])}]) -> lt x y |> gr_arith
     | Apply ({core = Internal B.Neg}, [{core = Apply ({core = Internal B.Gt},   [x ; y])}]) -> leq x y |> gr_arith
     | Quant (q, bs, ex)  -> Quant (q, gr_arith_bs bs, gr_arith ex) |> mk
-    | Apply (f, es)      -> Apply (gr_arith f, List.map gr_arith es) |> mk
-    | List (b, es)       -> List (b, List.map gr_arith es) |> mk
+    | Apply (f, es)      -> Apply (gr_arith f, map gr_arith es) |> mk
+    | List (b, es)       -> List (b, map gr_arith es) |> mk
     | If (c, t, f)       -> If (gr_arith c, gr_arith t, gr_arith f) |> mk 
-    | FcnApp (f, es)     -> FcnApp (gr_arith f, List.map gr_arith es) |> mk
+    | FcnApp (f, es)     -> FcnApp (gr_arith f, map gr_arith es) |> mk
     | Dot (r, h)         -> Dot (gr_arith r, h) |> mk
-    | Tuple es           -> Tuple (List.map gr_arith es) |> mk
-    | Record rs          -> Record (List.map (fun (h,e) -> h, gr_arith e) rs) |> mk
+    | Tuple es           -> Tuple (map gr_arith es) |> mk
+    | Record rs          -> Record (map (fun (h,e) -> h, gr_arith e) rs) |> mk
     | SetOf (ex, bs)     -> SetOf (gr_arith ex, gr_arith_bs bs) |> mk
     | SetSt (h, dom, p)  -> SetSt (h, gr_arith dom, gr_arith p) |> mk
-    | SetEnum es         -> SetEnum (List.map gr_arith es) |> mk
+    | SetEnum es         -> SetEnum (map gr_arith es) |> mk
     | Arrow (x, y)       -> Arrow (gr_arith x, gr_arith y) |> mk
-    | Rect es            -> Rect (List.map (fun (h,e) -> h, gr_arith e) es) |> mk
-    | Product es         -> Product (List.map gr_arith es) |> mk
+    | Rect es            -> Rect (map (fun (h,e) -> h, gr_arith e) es) |> mk
+    | Product es         -> Product (map gr_arith es) |> mk
     | Expr.T.Fcn (bs, ex) -> Expr.T.Fcn (gr_arith_bs bs, gr_arith ex) |> mk
     | Except (f, exs) ->
         let gr_arith_ex = function Except_apply ea -> Except_apply (gr_arith ea) | Except_dot h -> Except_dot h in
-        let exs = List.map (fun (es,ex) -> List.map gr_arith_ex es, gr_arith ex) exs in
+        let exs = map (fun (es,ex) -> map gr_arith_ex es, gr_arith ex) exs in
         Except (gr_arith f, exs) |> mk
     | Sequent seq -> gr_arith (unroll_seq seq)
     | Parens (ex,_) -> gr_arith (build ex)
     | Choose (h, Some d, ex) -> Choose (h, Some (gr_arith d), gr_arith ex) |> mk
     | Choose (h, None, ex) -> Choose (h, None, gr_arith ex) |> mk
     | Case (es, o) ->
-        let es = List.map (fun (p,e) -> gr_arith p, gr_arith e) es in
+        let es = map (fun (p,e) -> gr_arith p, gr_arith e) es in
         let o = match o with Some o -> Some (gr_arith o) | None -> None in
         Case (es, o) |> mk
     | Lambda (xs, ex) -> Lambda (xs, gr_arith ex) |> mk
@@ -433,7 +453,7 @@ and gr_arith_bs bs =
     let f = function
     | (v, k, Domain d) -> (v, k, Domain (gr_arith d))
     | b -> b
-    in List.map f bs
+    in map f bs
 ;;
 
 (****************************************************************************)
@@ -448,7 +468,7 @@ let rec unb bs =
     | (_, _, Domain d) as b1 :: (h,k,Ditto) :: bs ->
         unb (b1 :: (h,k,Domain d) :: bs)
     | (v, k, Domain dom) :: bs -> 
-        let n = (List.length bs) + 1 in
+        let n = (length bs) + 1 in
         let _, bs = app_bounds (shift 1) bs in
         let bs,ds = unb bs in 
         let ex = mem (Ix n |> mc <<< typ v) (app_expr (shift n) dom) in
@@ -513,16 +533,16 @@ let rec gr1 cx e : Expr.T.expr =
     let isAFcn x  = 
         types#update "isAFcn" (Fcn(Fcn(Bot,Bot),Bool)) ;
         (* noprops (Apply (noprops (Opaque "isAFcn"), [x])) <<< Some Bool *) 
-        opq "isAFcn" [x] <<< Some Bool in
+        opq "isAFcn" [x] in
     (* let isASeq x  = 
         types#update "isASeq" (Fcn(Fcn(Bot,Bot),Bool)) ;
         opq "isASeq" [x] in *)
     let str s     = noprops (String s) <<< Some Str in
     let fld f     = assign f isFld () in
-    let isFldOf f r = opq "isFldOf" [fld f ; r] <<< Some Bool in
+    let isFldOf f r = opq "isFldOf" [fld f ; r] in
     let ifte c t f = If (c,t,f) |> mc <<< typ e in
     let ifte_bool c t f = 
-      ifte c t f <<< Some Bool
+      ifte c t f
       (* let c = simp_simplefacts cx c in
       if is_true c then t else begin
       match !mode with | Spass | Fof -> conj (implies c t) (implies (neg c) f)
@@ -537,15 +557,14 @@ let rec gr1 cx e : Expr.T.expr =
     let nats = Internal B.Nat |> mc <<< Some (P Int) in 
     let leq x y = apply2b B.Lteq x y in
     let mk_num n = Num (string_of_int n,"") |> mc <<< Some Int in
-    (* let str_is_int x = try int_of_string x = int_of_string x with _ -> false in *)
-    (* let str_is_nat x = try int_of_string x >= 0 with _ -> false in *)
+    (* let str_is_nat x = try int_of_string x >= 0 with Invalid_argument _ -> false in *)
     (* let string_of_float' x = Str.replace_first (Str.regexp "^\\(.*\\)\\.$") "\\1" (string_of_float x) in *)
     let rec range2set a b = if a <= b then (Num (string_of_int a,"") |> mc <<< Some Int) :: range2set (a+1) b else [] in
     let get_exp_seq_func e = 
       match e.core with
       | Expr.T.Fcn ([h,_,Domain ({core = Apply ({core = Internal B.Range}, [{core = Num ("1","")} ; n])} as dom)], ex) -> Some (h,n,dom,ex)
       | Expr.T.Fcn ([h,_,Domain ({core = SetEnum es} as dom)], ex) -> 
-        let n' = List.length es in
+        let n' = length es in
         let n = Num (string_of_int n',"") |> mc <<< Some Int in
         if es = range2set 1 n' then Some (h,n,dom,ex) else None
       | _ -> None
@@ -553,7 +572,7 @@ let rec gr1 cx e : Expr.T.expr =
     let is_exp_seq_func e = get_exp_seq_func e <> None in
     let p e = paint_types cx e in
     let gr1p cx e = gr1 cx (p e) in
-    let gr1s = List.map (gr1 cx) in
+    let gr1s = map (gr1 cx) in
 (* typetree cx e ; *)
     let e = gr0 e in
     let e = if !mode = Fof then e else gr_arith e in
@@ -582,14 +601,14 @@ let rec gr1 cx e : Expr.T.expr =
         | B.Mem, _, Apply ({core = Internal op2}, [ex]) -> 
             begin match op2, ex.core with
             | B.SUBSET, _ -> gr1 cx (apply2b B.Subseteq x ex)
-            | B.UNION, SetEnum es                   -> gr1 cx (lOr (List.map (mem x) es))
+            | B.UNION, SetEnum es                   -> gr1 cx (lOr (map (mem x) es))
             | B.UNION, SetOf (ex, ([v,_,Domain s])) -> gr1p cx (exists ~dom:s (mem (sh1 x) ex))
             | B.UNION, SetSt (v, s, p)              -> gr1p cx (exists ~dom:s (lAnd [p ; mem (sh1 x) ix1]))
             | B.UNION, _                            -> gr1p cx (exists ~dom:ex (mem (sh1 x) ix1))
             | B.Seq, _ ->
                 begin match x.core with
                 | Tuple [] -> tla_true
-                | Tuple es -> lAnd (List.map (fun e -> mem e ex) es) |> gr1 cx
+                | Tuple es -> lAnd (map (fun e -> mem e ex) es) |> gr1 cx
                 | _ when is_exp_seq_func x -> 
                     let h,n,dom,ex1 = Option.get (get_exp_seq_func x) in
                     if is_Int n 
@@ -629,11 +648,11 @@ let rec gr1 cx e : Expr.T.expr =
             | _ -> mem (gr1 cx x) (gr1 cx y)
             end
         | B.Mem, _, SetEnum []        -> tla_false
-        | B.Mem, _, SetEnum es        -> gr1 cx (lOr (List.map (eq x) es))
-        | B.Mem, _, SetOf (ex, bs)    -> gr1 cx (Quant (Exists, bs, eq (app_expr (shift (List.length bs)) x) ex) |> mb)
+        | B.Mem, _, SetEnum es        -> gr1 cx (lOr (map (eq x) es))
+        | B.Mem, _, SetOf (ex, bs)    -> gr1 cx (Quant (Exists, bs, eq (app_expr (shift (length bs)) x) ex) |> mb)
         | B.Mem, _, SetSt (_, dom, p) -> gr1 cx (conj (mem x dom) (p <~ x))
-        | B.Mem, _, Product es -> gr1 cx (lAnd ([ eq (domain x) (range one (mk_num (List.length es))) ] @ 
-                                       (List.mapi (fun i e -> mem (fcnapp x (mk_num (i+1))) e) es)))
+        | B.Mem, _, Product es -> gr1 cx (lAnd ([ eq (domain x) (range one (mk_num (length es))) ] @ 
+                                       (mapi (fun i e -> mem (fcnapp x (mk_num (i+1))) e) es)))
         | B.Mem, _, Internal B.BOOLEAN when is_Bool (gr1 cx x) -> tla_true
         | B.Mem, Apply ({core = Internal B.Len}, [_]), Internal B.Nat -> tla_true
 
@@ -664,10 +683,10 @@ let rec gr1 cx e : Expr.T.expr =
             gr1 cx (conj (mem x (Internal B.Int |> mc <<< Some (P Int))) 
                         (leq (Num ("0","") |> mc <<< Some Int) x))
         | B.Mem, _, Rect rs ->
-            let (fs,_) = List.split rs in
-            List.iter add_tla_op (sprintf "record__%d" (add_record_id fs) :: fs) ;
-            gr1p cx (lAnd ((List.map (fun (f,_) -> isFldOf (str f) x) rs) @ 
-                           (List.map (fun (f,e) -> mem (dot x f) e) rs)))
+            let (fs,_) = split rs in
+            iter add_tla_op (sprintf "record__%d" (add_record_id fs) :: fs) ;
+            gr1p cx (lAnd ((map (fun (f,_) -> isFldOf (str f) x) rs) @ 
+                           (map (fun (f,e) -> mem (dot x f) e) rs)))
 
         | B.Mem, _, _ -> 
             mem (gr1 cx x) (gr1 cx y)
@@ -725,11 +744,11 @@ let rec gr1 cx e : Expr.T.expr =
             gr1 cx (Apply (o, [x ; Except (f, exs1 @ exs2) @@ y]) |> mk)
 
         | B.Eq, _, Except (f, ((([Except_apply _], _) :: _ ) as exs)) when is_term x -> 
-            let exs = List.map (fun (exp,b) -> match exp with [Except_apply a] -> a,b | _ -> assert false) exs in
-            let zs,_ = List.split exs in
+            let exs = map (fun (exp,b) -> match exp with [Except_apply a] -> a,b | _ -> assert false) exs in
+            let zs,_ = split exs in
             lAnd [ isAFcn x ; 
                    eq (domain x) (domain f) ;
-                   lAndx (List.map (fun (a,b) -> eq (fcnapp x a) b) exs) ;
+                   lAndx (map (fun (a,b) -> eq (fcnapp x a) b) exs) ;
                    forall ~dom:(apply2' (Internal B.Setminus |> mc) (domain f) (SetEnum zs |> mc)) 
                            (eq (fcnapp (sh1 f) ix1) (fcnapp (sh1 x) ix1)) 
                  ] |> gr1p cx
@@ -756,11 +775,11 @@ let rec gr1 cx e : Expr.T.expr =
                                     (ifte (eq ix1 (sh1 b)) (sh1 e2) (fcnapp (sh1 g) ix1)))])
 
         | B.Eq, _, Record es when is_term x -> 
-            gr1p cx (lAnd ((List.map (fun (h,_) -> isFldOf (str h) x) es) @ (List.map (fun (h,e) -> eq (dot x h) e) es)))
+            gr1p cx (lAnd ((map (fun (h,_) -> isFldOf (str h) x) es) @ (map (fun (h,e) -> eq (dot x h) e) es)))
         | B.Eq, Record _, _ when is_term y -> 
             gr1 cx (Apply (o, [y ; x]) |> mk)
-        (* | _, Tuple es -> lAnd (List.mapi (fun i e -> eq (fcnapp x (Num (string_of_int (i+1),"") |> mk)) e) es)
-        | Tuple es, _ -> lAnd (List.mapi (fun i e -> eq (fcnapp y (Num (string_of_int (i+1),"") |> mk)) e) es) *)
+        (* | _, Tuple es -> lAnd (mapi (fun i e -> eq (fcnapp x (Num (string_of_int (i+1),"") |> mk)) e) es)
+        | Tuple es, _ -> lAnd (mapi (fun i e -> eq (fcnapp y (Num (string_of_int (i+1),"") |> mk)) e) es) *)
 
         | (B.Eq | B.Equiv), If (c1,t1,f1), If (c2,t2,f2) -> apply2b op x y
         (* | If (c1,t1,f1), If (c2,t2,f2) -> gr1 cx (lAnd [implies c1 (conj (implies c2 (eq t1 t2))
@@ -831,14 +850,14 @@ let rec gr1 cx e : Expr.T.expr =
             gr1 cx (Apply (o, [y ; x]) |> mk)
 
         | B.Eq, Opaque _, Lambda (vs, ex) -> 
-            let vs = List.fold_right (fun (h,s) r -> match s with Shape_expr -> (Opaque h.core |> mk) :: r | Shape_op _ -> r) vs [] in
-            let ex = List.fold_right (fun v e -> e <~ v) vs ex in
+            let vs = fold_right (fun (h,s) r -> match s with Shape_expr -> (Opaque h.core |> mk) :: r | Shape_op _ -> r) vs [] in
+            let ex = fold_right (fun v e -> e <~ v) vs ex in
             (* let x = Apply (x, vs) |> mk in *)
             let x = FcnApp (x, vs) |> mk in
             gr1p cx (eq x ex)
 
         | B.Subseteq, SetEnum es, _ -> 
-            gr1 cx (lAnd (List.map (fun e -> mem e y) es))
+            gr1 cx (lAnd (map (fun e -> mem e y) es))
         | (B.Gt | B.Gteq | B.Lt | B.Lteq), _, If (c,t,f) when is_term x -> gr1 cx (ifte_bool c (apply2' o x t <<< typ o) (apply2' o x f <<< typ o))
         | (B.Gt | B.Gteq | B.Lt | B.Lteq), If (c,t,f), _ when is_term y -> gr1 cx (ifte_bool c (apply2' o t y <<< typ o) (apply2' o f y <<< typ o))
         | (B.Plus | B.Minus | B.Times | B.Exp), _, If (c,t,f) when is_term x -> gr1 cx (ifte c (apply2' o x t <<< typ o) (apply2' o x f <<< typ o))
@@ -900,10 +919,10 @@ let rec gr1 cx e : Expr.T.expr =
                 begin match doms bs with
                 | [] -> assert false
                 | [ex] -> gr1p cx ex
-                | exs -> gr1p cx (Tuple exs |> mc <<< Some (Tup (List.map typbot exs)))
+                | exs -> gr1p cx (Tuple exs |> mc <<< Some (Tup (map typbot exs)))
                 end
             | Tuple [] -> SetEnum [] |> mc
-            | Tuple es -> range one (Num (string_of_int (List.length es), "") |> mk)
+            | Tuple es -> range one (Num (string_of_int (length es), "") |> mk)
             | Except (f,_) -> 
                 apply o [gr1 cx f]
             | Apply ({core = Internal B.Tail}, [s]) ->
@@ -931,7 +950,7 @@ let rec gr1 cx e : Expr.T.expr =
         | B.Head, _ -> fcnapp ex one
         (* | B.Seq, _  -> opq "Seq"  [gr1 cx ex] *)
         (* | B.Seq, _  -> apply1 B.UNION (SetOf (Arrow (apply B.Range one ix1, (sh1 ex)) |> mk, [fresh_name () |> mk, Unknown, Domain nats]) |> mk) *)
-        | B.Len, Tuple es -> Num (string_of_int (List.length es), "") |> mk
+        | B.Len, Tuple es -> Num (string_of_int (length es), "") |> mk
         | B.Len, Apply ({core = Internal B.Tail}, [s]) -> gr1 cx (ifte (eq s (Tuple [] |> mc)) zero (minus (len s) one))
         | B.Len, Apply ({core = Internal B.Append}, [ex ; _]) -> gr1 cx (plus (len ex) one)
         | B.Len, Apply ({core = Internal B.Cat}, [x ; y])   -> gr1 cx (plus (len x) (len y))
@@ -979,19 +998,17 @@ let rec gr1 cx e : Expr.T.expr =
         | Apply ({core = Internal B.SubSeq}, _)
         | Apply ({core = Internal B.SelectSeq}, _) -> tla_true
         | If (c,t,f) -> gr1 cx (ifte_bool c (isAFcn t) (isAFcn f))
-        | _ -> isAFcn ex
-            (* Apply (opq "isAFcn" [], [ex]) |> mk *)
+        | _ -> Apply (opq "isAFcn" [], [ex]) |> mk
         end
     | Apply ({core = Opaque "isFldOf"}, [h ; ex]) ->
         let ex = gr1 cx ex in
         begin match h.core, ex.core with
         | String h, Record rs -> 
-            let (hs,_) = List.split rs in 
-            if List.mem h hs then tla_true else tla_false
+            let (hs,_) = List.split rs in if List.mem h hs then tla_true else tla_false
         | _, Except (r,_) -> gr1 cx (isFldOf h r)
         | _, If (c,t,f) -> 
             ifte_bool c (isFldOf h t) (isFldOf h f) |> gr1 cx
-        | _ -> isFldOf h ex
+        | _ -> Apply (opq "isFldOf" [], [h;ex]) |> mb
         end
     | Apply (e, es) -> 
         Apply (gr1 cx e, gr1s es) |> mk
@@ -999,12 +1016,14 @@ let rec gr1 cx e : Expr.T.expr =
     | FcnApp (f, es) -> 
         let f = gr1 cx f in
         let es = gr1s es in
+(* Util.eprintf "Rewriting: %a : %s" (print_prop ()) (opaque cx (FcnApp (f, es) |> mk)) (typ_to_str e) ; *)
         begin match f.core, es with
         | Expr.T.Fcn ([_,_,Domain dom], ex), [x] -> 
             let ex = (ex <~ x) <<< typ e in
             let c = mem x dom
               |> simp_simplefacts cx
             in
+(* Util.eprintf "--- %a : %s" (print_prop ()) (opaque cx c) (typ_to_str c) ; *)
             if is_true c then ex else ifte c ex (unspec cx e) |> gr1p cx
         | Except (f, [([Except_apply y], ex)]), [x] -> 
             let c1 = mem x (domain f) 
@@ -1018,11 +1037,12 @@ let rec gr1 cx e : Expr.T.expr =
             if is_true c1 then 
               if is_true c2 then ex <<< typ e |> gr1 cx
               else ifte c2 (ex <<< typ e) (fcnapp f x <<< typ e) |> gr1p cx
-            else ifte c1 (ifte c2 (ex <<< typ e) (fcnapp f x <<< typ e)) (unspec cx e) |> gr1p cx
+            else 
+              ifte c1 (ifte c2 (ex <<< typ e) (fcnapp f x <<< typ e)) (unspec cx e) |> gr1p cx
         | If (c,t,f), es ->
             gr1 cx (ifte c (FcnApp (t, es) |> mk) (FcnApp (f, es) |> mk))
-        | Tuple ts, [{core = Num (i,"")}] when 1 <= int_of_string i && int_of_string i <= List.length ts ->
-            gr1 cx (try List.nth ts ((int_of_string i) - 1) with e -> raise e)
+        | Tuple ts, [{core = Num (i,"")}] when 1 <= int_of_string i && int_of_string i <= length ts ->
+            gr1 cx (nth ts ((int_of_string i) - 1))
         | Apply ({core = Internal B.Append}, [s ; ex]), [i] -> 
             gr1 cx (ifte (mem i (range one (len s))) (fcnapp s i) (ifte (eq i (plus (len s) one)) ex (unspec cx e)))
         | Apply ({core = Internal B.Tail}, [s]), [i] -> 
@@ -1041,8 +1061,9 @@ let rec gr1 cx e : Expr.T.expr =
     | Dot ({core = Except (r, [([Except_dot f], ex)])}, h) -> 
         gr1 cx (ifte (conj (eq (str f) (str h)) (isFldOf (str f) r)) ex (dot r h <<< typ e))
     | Dot ({core = Record rs}, h) ->
-        begin try let (_,ex) = List.find (fun (h',_) -> h = h') rs in ex
-              with _ -> (* add_field h ; dot (gr1 cx r) h *) unspec cx e end
+        begin try let (_,ex) = find (fun (h',_) -> h = h') rs in ex
+        with Not_found -> (* add_field h ; dot (gr1 cx r) h *) unspec cx e
+        end
     | Dot ({core = If (c,t,f)}, h) -> gr1 cx (ifte c (dot t h <<< typ e) (dot f h <<< typ e))
     | Dot (ex, h) -> add_field h ; dot (gr1 cx ex) (* add_field_prefix *) h <<< typ e
 
@@ -1056,14 +1077,14 @@ let rec gr1 cx e : Expr.T.expr =
     | Case ([(c, ex)], Some o) -> gr1p cx (ifte c ex o)
     (* | Case ((c, ex) :: es, None) -> (* gr1 cx (ifte c ex (Case (es, None) |> mk)) *) *)
     (* | Case (es, None) -> 
-        let (cs,es) = List.split es in
-        let p = lAnd (List.hd cs :: (List.map neg (List.tl cs))) in
-        gr1 cx (ifte p (List.hd es) (Case (List.combine (List.tl cs) (List.tl es), None) |> mk)) *)
+        let (cs,es) = split es in
+        let p = lAnd (hd cs :: (map neg (tl cs))) in
+        gr1 cx (ifte p (hd es) (Case (combine (tl cs) (tl es), None) |> mk)) *)
     | Case (es, other) ->
-        let cs,es = List.split es in
-        let c,cs = List.hd cs, List.tl cs in
-        let e,es = List.hd es, List.tl es in
-        gr1 cx (ifte (lAnd (c :: (List.map neg cs))) e (Case (List.combine cs es, other) |> mk))
+        let cs,es = split es in
+        let c,cs = hd cs, tl cs in
+        let e,es = hd es, tl es in
+        gr1 cx (ifte (lAnd (c :: (map neg cs))) e (Case (combine cs es, other) |> mk))
 
     | List ((And | Refs), es) -> lAnd (gr1s es)
     | List (Or, es) -> lOr (gr1s es)
@@ -1077,10 +1098,10 @@ let rec gr1 cx e : Expr.T.expr =
             let cx = add_bs_ctx bs cx in
             let hs,ex = deimpl ex
               |>> gr1s
-              |>> List.map deconj
-              |>> List.concat
+              |>> map deconj
+              |>> concat
             in
-            List.iter (add_simplefact cx) hs ;
+            iter (add_simplefact cx) hs ;
             ex 
             |> gr1 cx 
             |> simp_simplefacts cx
@@ -1100,12 +1121,12 @@ let rec gr1 cx e : Expr.T.expr =
     | Quant (q, bs, ex) ->
 (* Util.eprintf "Rewriting: %a : %s" (print_prop ()) (opaque cx e) (typ_to_str e) ; *)
         let _,ds = unb bs in
-(* List.iter (fun e -> Util.eprintf "dom: %a" (print_prop ()) (opaque (add_bs_ctx bs cx) e)) ds ; *)
+(* iter (fun e -> Util.eprintf "dom: %a" (print_prop ()) (opaque (add_bs_ctx bs cx) e)) ds ; *)
         let bs = gr1_bs cx bs in
         (* let bs = unditto bs in *)
-        let v, k, dom = List.hd bs in
+        let v, k, dom = hd bs in
         let dom = match dom with Domain d -> d | _ -> assert false in
-        List.iter (add_simplefact (add_bs_ctx bs cx)) ds ;
+        iter (add_simplefact (add_bs_ctx bs cx)) ds ;
         let e = match dom.core with 
         | SetEnum es -> 
             let ex = match bs with
@@ -1115,7 +1136,7 @@ let rec gr1 cx e : Expr.T.expr =
                 Quant (q, bs, ex) |> mk
             | [] -> assert false
             in
-            let ex = List.map (fun a -> ex <~ a) es in
+            let ex = map (fun a -> ex <~ a) es in
             let ex = match ex, q with 
             | [ex], _ -> ex 
             | _, Forall -> lAnd ex
@@ -1123,7 +1144,7 @@ let rec gr1 cx e : Expr.T.expr =
             in 
             gr1 cx ex
         | Apply ({core = Internal B.Setminus}, [(* {core = SetEnum _} as *) s ; t]) -> 
-            let bs = (v, k, Domain s) :: List.tl bs in
+            let bs = (v, k, Domain s) :: tl bs in
             let st = neg (mem (Ix 1 |> mc <<< typ v) (app_expr (shift 1) t)) in
             let ex = match q with Forall -> implies st ex | Exists -> conj st ex in
             gr1 cx (Quant (q, bs, gr1 (add_bs_ctx bs cx) ex) |> mk)
@@ -1143,13 +1164,13 @@ let rec gr1 cx e : Expr.T.expr =
         Except (gr1 cx f, [[Except_apply (gr1 cx a)], gr1 cx b]) |> mk
     | Expr.T.Fcn (bs, ex) ->
         Expr.T.Fcn (gr1_bs cx bs, gr1 (add_bs_ctx bs cx) ex) |> mk
-    | Record es         -> Record (List.map (fun (h,e) -> h, gr1 cx e) es) |> mk
-    | Rect es           -> Rect (List.map (fun (h,e) -> h, gr1 cx e) es) |> mk
+    | Record es         -> Record (map (fun (h,e) -> h, gr1 cx e) es) |> mk
+    | Rect es           -> Rect (map (fun (h,e) -> h, gr1 cx e) es) |> mk
     | Tuple es          -> Tuple (gr1s es) |> mk
     (* | Product es -> 
-        let ebs = List.mapi (fun i e -> Ix (i+1) |> mk, ((fresh_name ()) |> mk, Unknown, Domain e)) es in
-        let (es,bs) = List.split ebs in
-        gr1 cx (SetOf (Tuple (List.rev es) |> mk, bs) |> mk) *)
+        let ebs = mapi (fun i e -> Ix (i+1) |> mk, ((fresh_name ()) |> mk, Unknown, Domain e)) es in
+        let (es,bs) = split ebs in
+        gr1 cx (SetOf (Tuple (rev es) |> mk, bs) |> mk) *)
     | If (c,t,f) -> 
 (* Util.eprintf "Grounding: %a : %s" (print_prop ()) (opaque cx e) (typ_to_str e) ; *)
         let c = c 
@@ -1185,7 +1206,7 @@ let rec gr1 cx e : Expr.T.expr =
     | _ -> e
 and gr1_bs cx bs =
   bs
-  |> List.map 
+  |> map 
     begin function
     | (v, k, Domain dom) -> (v, k, Domain (gr1 cx dom))
     | b -> b
@@ -1226,30 +1247,30 @@ let rec unbound cx e =
           |> fun ex -> match q with Forall -> implies ds ex | Exists -> conj ds ex
         in
         Quant (q, bs, ex) |> mk
-    | Apply (f, es)     -> Apply (unbound cx f, List.map (unbound cx) es) |> mk
-    | List (b, es)      -> List (b, List.map (unbound cx) es) |> mk
+    | Apply (f, es)     -> Apply (unbound cx f, map (unbound cx) es) |> mk
+    | List (b, es)      -> List (b, map (unbound cx) es) |> mk
     | If (c, t, f)      -> If (unbound cx c, unbound cx t, unbound cx f) |> mk 
-    | FcnApp (f, es)    -> FcnApp (unbound cx f, List.map (unbound cx) es) |> mk
+    | FcnApp (f, es)    -> FcnApp (unbound cx f, map (unbound cx) es) |> mk
     | Dot (r, h)        -> Dot (unbound cx r, h) |> mk
-    | Tuple es          -> Tuple (List.map (unbound cx) es) |> mk
-    | Record rs         -> Record (List.map (fun (h,e) -> h, unbound cx e) rs) |> mk
+    | Tuple es          -> Tuple (map (unbound cx) es) |> mk
+    | Record rs         -> Record (map (fun (h,e) -> h, unbound cx e) rs) |> mk
     | SetOf (ex, bs)    -> SetOf (unbound (add_bs_ctx bs cx) ex, unbound_bs cx bs) |> mk
     | SetSt (h, dom, p) -> SetSt (h, unbound cx dom, unbound (add_bs_ctx [h,Unknown,Domain dom] cx) p) |> mk
-    | SetEnum es        -> SetEnum (List.map (unbound cx) es) |> mk
+    | SetEnum es        -> SetEnum (map (unbound cx) es) |> mk
     | Arrow (x, y)      -> Arrow (unbound cx x, unbound cx y) |> mk
-    | Rect es           -> Rect (List.map (fun (h,e) -> h, unbound cx e) es) |> mk
-    | Product es        -> Product (List.map (unbound cx) es) |> mk
+    | Rect es           -> Rect (map (fun (h,e) -> h, unbound cx e) es) |> mk
+    | Product es        -> Product (map (unbound cx) es) |> mk
     | Expr.T.Fcn (bs, ex) -> Expr.T.Fcn (unbound_bs cx bs, unbound (add_bs_ctx bs cx) ex) |> mk
     | Except (f, exs) ->
         let unbound_ex = function Except_apply ea -> Except_apply (unbound cx ea) | Except_dot h -> Except_dot h in
-        let exs = List.map (fun (es,ex) -> List.map unbound_ex es, unbound cx ex) exs in
+        let exs = map (fun (es,ex) -> map unbound_ex es, unbound cx ex) exs in
         Except (unbound cx f, exs) |> mk
     | Sequent seq -> unbound cx (unroll_seq seq)
     | Parens (ex,_) -> unbound cx (build ex)
     | Choose (h, Some d, ex) -> Choose (h, Some (unbound cx d), unbound (add_bs_ctx [h,Unknown,Domain d] cx) ex) |> mk
     | Choose (h, None, ex) -> Choose (h, None, unbound (add_bs_ctx [h,Unknown,No_domain] cx) ex) |> mk
     | Case (es, o) ->
-        let es = List.map (fun (p,e) -> unbound cx p, unbound cx e) es in
+        let es = map (fun (p,e) -> unbound cx p, unbound cx e) es in
         let o = match o with Some o -> Some (unbound cx o) | None -> None in
         Case (es, o) |> mk
     | Lambda (xs, ex) -> Lambda (xs, unbound cx ex) |> mk
@@ -1258,5 +1279,5 @@ and unbound_bs cx bs =
     let f = function
     | (v, k, Domain d) -> (v, k, Domain (unbound cx d))
     | b -> b
-    in List.map f bs
+    in map f bs
 ;;

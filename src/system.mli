@@ -34,8 +34,8 @@ val read_lines : line_buffer -> line list;;
 (** [read_lines buf]
     Perform one [Unix.read] system call to fill the buffer [buf],
     and return the lines of characters read.  In case of an incomplete
-    line, leave it in the buffer for the next call.  Append [Eof] to
-    the list if [Unix.read] returned an end of file.
+    line, leave it in the buffer for the next call.  Append [Leof] to
+    the list iff [Unix.read] returned an end of file.
 *)
 
 type toolbox_command =

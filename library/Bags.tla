@@ -8,7 +8,7 @@
 (* subset of the positive integers.  An element e belongs to bag B iff e  *)
 (* is in the domain of B, in which case bag B contains B[e] copies of e.  *)
 (**************************************************************************)
-EXTENDS TLC,        
+EXTENDS TLC, TLAPS,
         FiniteSetTheorems,
         SequenceTheorems
         
@@ -178,13 +178,11 @@ THEOREM Bags_SqsubseteqPO_AntiSymmetry == ASSUME NEW A, NEW B, IsABag(A), IsABag
 (*Reflexivity*)
 THEOREM Bags_SqsubsetPO_Reflexivity == ASSUME NEW B, IsABag(B)
                                   PROVE B \sqsubseteq B
-PROOF
-BY SMT DEF \sqsubseteq                                  
+BY SMT DEF \sqsubseteq, IsABag                                  
 
 (*Transitivity*)            
 THEOREM Bags_SqsubseteqPO_Transitivity == ASSUME NEW A, NEW B, NEW C, IsABag(A), IsABag(B), IsABag(C), A \sqsubseteq B, B \sqsubseteq C
                              PROVE A \sqsubseteq C
-PROOF
 <1>1. DOMAIN A \subseteq DOMAIN C /\ DOMAIN A \subseteq DOMAIN B
       BY DEF \sqsubseteq
 <1>2. (\A i \in DOMAIN A: A[i] <= B[i]) /\ (\A i \in DOMAIN B: B[i]<=C[i] )
@@ -207,7 +205,6 @@ THEOREM Bags_EmptyBag == ASSUME NEW B, IsABag(B)
                                 /\ DOMAIN EmptyBag ={}
                                 /\ EmptyBag \sqsubseteq B
                                 /\ \A e: ~BagIn(e, EmptyBag)
-PROOF    
 <1>1.  DOMAIN EmptyBag = {}
        BY DEF EmptyBag, SetToBag     
 <1>2. IsABag(EmptyBag)
@@ -310,12 +307,10 @@ PROOF
 
 THEOREM Bags_Inverse == ASSUME NEW S
                         PROVE BagToSet(SetToBag(S))=S
-PROOF
 BY DEF SetToBag, BagToSet                  
 
 THEOREM Bags_Inverse1 == ASSUME NEW B, IsABag(B)
                          PROVE SetToBag(BagToSet(B)) \sqsubseteq B
-PROOF
 <1>1. DOMAIN SetToBag(BagToSet(B)) \subseteq DOMAIN B
       BY DEF SetToBag, BagToSet, \sqsubseteq, IsABag
 <1>2. \A i \in DOMAIN SetToBag(BagToSet(B)): SetToBag(BagToSet(B))[i] <= B[i]
@@ -331,8 +326,6 @@ PROOF
 
 THEOREM Bags_SetToBagEquality == ASSUME NEW A, NEW B
                                  PROVE A=B <=> SetToBag(A)=SetToBag(B)
-PROOF 
-
 <1>1. A=B => SetToBag(A) = SetToBag(B)
       BY DEF SetToBag
 <1>2. ASSUME SetToBag(A)=SetToBag(B) PROVE A=B
@@ -344,51 +337,39 @@ PROOF
       BY <1>1, <1>2
 
 (***************************************************************************)
-(* Union of Bags is a Bag                                                  *)
+(* Union of Bags                                                           *)
 (***************************************************************************)
 
-THEOREM Bags_UnionIsABag == ASSUME NEW B1, NEW B2, IsABag(B1), IsABag(B2)
-                            PROVE IsABag(B1(+)B2)
-PROOF                                                           
-<1>1. \A i \in DOMAIN(B1(+)B2): (B1(+)B2)[i] \in {n \in Nat : n>0}
-      <2>1. TAKE i \in DOMAIN(B1(+)B2)
-      <2>2. i \in DOMAIN(B1) \cup DOMAIN(B2)
-            BY DEF (+)
-      <2>3. CASE i \in DOMAIN(B1) /\ i \in DOMAIN(B2)
-            BY <2>3, SMT DEF (+), IsABag
-      <2>4. CASE i \notin DOMAIN(B1) /\ i \in DOMAIN(B2)
-            <3>1. (B1(+)B2)[i]=0+B2[i]
-                  BY <2>4, SMT DEF (+)
-            <3>2. 0+B2[i]=B2[i]
-                  BY SMT, <2>4 DEF IsABag
-            <3>3. QED            
-                  BY <2>4, <3>1, <3>2 DEF IsABag
-      <2>5. CASE i \in DOMAIN(B1) /\ i \notin DOMAIN(B2)
-            <3>1. (B1(+)B2)[i]=B1[i]+0
-                  BY <2>5, SMT DEF (+)
-            <3>2. B1[i]+0=B1[i]
-                  BY SMT, <2>5 DEF IsABag
-            <3>3. QED            
-                  BY <2>5, <3>1, <3>2 DEF IsABag
-      <2>6. QED
-            BY <2>2, <2>3, <2>4, <2>5    
-<1>2. QED      
-      BY <1>1 DEF IsABag, (+)
-      
+THEOREM Bags_Union == 
+  ASSUME NEW B1, NEW B2, IsABag(B1), IsABag(B2)
+  PROVE  /\ IsABag(B1(+)B2)
+         /\ DOMAIN(B1 (+) B2) = DOMAIN B1 \cup DOMAIN B2
+         /\ \A e : CopiesIn(e, B1(+)B2) = CopiesIn(e,B1) + CopiesIn(e,B2)
+BY DEF IsABag, (+), CopiesIn, BagIn, BagToSet
+
 (***************************************************************************)
-(* Differene of Bags is a Bag                                              *)
+(* Differene of Bags                                                       *)
 (***************************************************************************)
 
-THEOREM Bags_DifferenceIsABag == ASSUME NEW B1, NEW B2, IsABag(B1), IsABag(B2)
-                                 PROVE IsABag(B1(-)B2)
-PROOF
-<1>1. \A i \in DOMAIN(B1(-)B2): (B1(-)B2)[i] \in {n \in Nat : n>0}
-      <2>1. TAKE i \in DOMAIN(B1(-)B2)
-      <2>2. QED
-            BY SMT DEF IsABag, (-)      
-<1>2. QED
-      BY <1>1 DEF IsABag, (-)  
-
+THEOREM Bags_Difference == 
+  ASSUME NEW B1, NEW B2, IsABag(B1), IsABag(B2)
+  PROVE  /\ IsABag(B1(-)B2)
+         /\ DOMAIN (B1 (-) B2) = {e \in DOMAIN B1 : e \notin DOMAIN B2 \/ B1[e] > B2[e]}
+         /\ \A e : CopiesIn(e, B1 (-) B2) = IF BagIn(e, B1(-)B2) THEN CopiesIn(e,B1) - CopiesIn(e,B2) ELSE 0
+<1>. DEFINE B == [e \in DOMAIN B1 |-> IF e \in DOMAIN B2 THEN B1[e] - B2[e]
+                                                         ELSE B1[e]]
+            D == {d \in DOMAIN B1 : B[d] > 0}
+<1>1. B \in [DOMAIN B1 -> Int]
+  BY DEF IsABag
+<1>2. B1 (-) B2 = [e \in D |-> B[e]]
+  BY DEF (-)
+<1>3. D = {e \in DOMAIN B1 : e \notin DOMAIN B2 \/ B1[e] > B2[e]}
+  BY DEF IsABag
+<1>4. \A e \in D : B[e] = B1[e] - (IF e \in DOMAIN B2 THEN B2[e] ELSE 0)
+  BY DEF IsABag
+<1>. HIDE DEF B
+<1>. QED
+  BY <1>1, <1>2, <1>3, <1>4 DEF IsABag, CopiesIn, BagIn, BagToSet
 
 (***************************************************************************)
 (* Union is Commutative                                                    *)
@@ -396,11 +377,10 @@ PROOF
 
 THEOREM Bags_UnionCommutative == ASSUME NEW B1, NEW B2, IsABag(B1), IsABag(B2)
                                PROVE B1(+)B2 = B2(+)B1      
-PROOF
 <1>1. DOMAIN(B1(+)B2) = DOMAIN(B2(+)B1)
       BY DEF (+) 
 <1>2. B1(+)B2 \in [DOMAIN(B1(+)B2) -> {n \in Nat: n>0}] /\ B2(+)B1 \in [DOMAIN(B1(+)B2) -> {n \in Nat: n>0}]
-      BY <1>1, Bags_UnionIsABag DEF IsABag 
+      BY <1>1, Bags_Union DEF IsABag 
 <1>3. \A i \in DOMAIN(B1(+)B2): (B1(+)B2)[i] = (B2(+)B1)[i]
       <2>1. TAKE i \in DOMAIN(B1(+)B2)
       <2>.  QED
@@ -414,29 +394,7 @@ PROOF
 
 THEOREM Bags_UnionAssociative == ASSUME NEW B1, NEW B2, NEW B3, IsABag(B1), IsABag(B2), IsABag(B3)
                                  PROVE (B1(+)B2)(+)B3 = B1(+)(B2(+)B3)
-PROOF
-<1>1. DOMAIN((B1(+)B2)(+)B3) = DOMAIN(B1(+)(B2(+)B3))
-      BY DEF (+)
-<1>2. \A i \in DOMAIN((B1(+)B2)(+)B3): ((B1(+)B2)(+)B3)[i]= (B1(+)(B2(+)B3))[i]
-      <2>1. TAKE i \in DOMAIN((B1(+)B2)(+)B3)
-      <2>2. CASE i \in DOMAIN B1 /\ i \in DOMAIN B2 /\ i \in DOMAIN B3    
-            BY <2>2, <2>1, SMT DEF IsABag, (+)
-      <2>3. CASE i \in DOMAIN B1 /\ i \in DOMAIN B2 /\ i \notin DOMAIN B3    
-            BY <2>3, <2>1, SMT DEF IsABag, (+)
-      <2>4. CASE i \in DOMAIN B1 /\ i \notin DOMAIN B2 /\ i \in DOMAIN B3    
-            BY <2>4, <2>1, SMT DEF IsABag,(+)
-      <2>5. CASE i \in DOMAIN B1 /\ i \notin DOMAIN B2 /\ i \notin DOMAIN B3    
-      <2>6. CASE i \notin DOMAIN B1 /\ i \in DOMAIN B2 /\ i \in DOMAIN B3    
-            BY <2>6, <2>1, SMT DEF IsABag, (+)
-      <2>7. CASE i \notin DOMAIN B1 /\ i \in DOMAIN B2 /\ i \notin DOMAIN B3    
-            BY <2>7, <2>1, SMT DEF IsABag, (+)
-      <2>8. CASE i \notin DOMAIN B1 /\ i \notin DOMAIN B2 /\ i \in DOMAIN B3    
-      <2>9. CASE i \notin DOMAIN B1 /\ i \notin DOMAIN B2 /\ i \notin DOMAIN B3    
-            BY <2>9, <2>1, SMT DEF (+)      
-      <2>. QED      
-           BY <2>2, <2>3, <2>4, <2>6, <2>5, <2>7, <2>8, <2>9
-<1>3. QED
-      BY <1>1, <1>2 DEF (+)
+BY DEF IsABag, (+)
 
 (***************************************************************************)
 (* Given Bags B1, B2 then B1 \sqsubseteq B1(+)B2                           *)
@@ -444,9 +402,8 @@ PROOF
       
 THEOREM Bags_UnionSqSubset == ASSUME NEW B1, NEW B2, IsABag(B1), IsABag(B2)
                               PROVE B1 \sqsubseteq B1(+)B2
-PROOF                              
 <1>1. IsABag(B1(+)B2)
-      BY Bags_UnionIsABag
+      BY Bags_Union
 <1>2. DOMAIN B1 \subseteq DOMAIN(B1(+)B2)
       BY DEF (+)
 <1>3. \A i \in DOMAIN B1: B1[i]<=(B1(+)B2)[i]
@@ -462,7 +419,6 @@ PROOF
 
 THEOREM Bags_ScalingSqSubseteq == ASSUME NEW B, IsABag(B), NEW n \in Nat, NEW m \in Nat, m<n
                                   PROVE Scaling(m, B) \sqsubseteq Scaling(n, B)
-PROOF
 <1>1. CASE m>0 /\ n>0
       <2>1. DOMAIN Scaling(m, B)= DOMAIN Scaling(n, B)
       BY <1>1, Bags_Scaling 
@@ -474,7 +430,7 @@ PROOF
             BY <2>1, <2>2 DEF \sqsubseteq     
 <1>2. CASE m=0 /\ n>0
       <2>1. Scaling(m, B)=EmptyBag
-            BY <1>2, Bags_UnionIsABag DEF Scaling
+            BY <1>2, Bags_Union DEF Scaling
       <2>2. QED
             BY <2>1, Bags_EmptyBag, Bags_Scaling
 <1>3. CASE m>0 /\ n=0 \* Impossible Case
@@ -490,7 +446,6 @@ PROOF
 
 THEOREM Bags_DifferenceSqsubset == ASSUME NEW A, NEW B, IsABag(A), IsABag(B)
                                    PROVE A(-)B \sqsubseteq A 
-PROOF 
 <1>1. DOMAIN(A(-)B) \subseteq DOMAIN A
       BY DEF (-) 
 <1>2. \A i \in DOMAIN(A(-)B) : (A(-)B)[i] <= A[i]
@@ -503,15 +458,14 @@ PROOF
 (***************************************************************************)
 (* EmptyBag is Addidtive Identity                                          *)
 (***************************************************************************)  
-  
+
 THEOREM Bags_EmptyBagOperations == ASSUME NEW B, IsABag(B)
-                                   PROVE /\ B(+)EmptyBag=B
-                                         /\ B(-)EmptyBag=B
-PROOF 
-<1>1. B(+)EmptyBag=B
+                                   PROVE /\ B (+) EmptyBag = B
+                                         /\ B (-) EmptyBag = B
+<1>1. B (+) EmptyBag = B
       <2>1. IsABag(B(+)EmptyBag) 
-            BY Bags_EmptyBag, Bags_UnionIsABag
-      <2>2. DOMAIN(B(+)EmptyBag)= DOMAIN B
+            BY Bags_EmptyBag, Bags_Union
+      <2>2. DOMAIN(B(+)EmptyBag) = DOMAIN B
             BY Bags_EmptyBag DEF (+)
       <2>3. B \in [DOMAIN B -> {n \in Nat : n>0}] /\ B(+)EmptyBag \in [DOMAIN B -> {n \in Nat : n>0}]
             BY <2>1, <2>2 DEF IsABag
@@ -521,21 +475,18 @@ PROOF
                   BY <3>1, SMT DEF EmptyBag, (+), IsABag, SetToBag
       <2>5. QED 
            BY <2>2, <2>3, <2>4     
-<1>2. B(-)EmptyBag=B
-      <2>1. IsABag(B(-)EmptyBag)
-            BY Bags_EmptyBag, Bags_DifferenceIsABag
-      <2>0. DOMAIN EmptyBag={} 
-            BY Bags_EmptyBag           
-      <2>2. DOMAIN(B(-)EmptyBag)=DOMAIN B
-            BY <2>1, <2>0, Bags_EmptyBag DEF (-)
+<1>2. B (-) EmptyBag = B
+      <2>1. /\ IsABag(B(-)EmptyBag)
+            /\ DOMAIN(B (-) EmptyBag) = DOMAIN B
+            BY Bags_EmptyBag, Bags_Difference, Isa
       <2>3. B \in [DOMAIN B -> {n \in Nat : n>0}] /\ B(-)EmptyBag \in [DOMAIN B -> {n \in Nat : n>0}]
-            BY <2>1, <2>2 DEF IsABag
+            BY <2>1 DEF IsABag
       <2>4. \A i \in DOMAIN B: (B(-)EmptyBag)[i]=B[i]
             <3>1. TAKE i \in DOMAIN B 
             <3>2. QED
-                  BY <3>1, SMT DEF EmptyBag, (-), IsABag, SetToBag       
+                  BY <3>1 DEF EmptyBag, (-), IsABag, SetToBag       
       <2>5. QED 
-            BY <2>2, <2>3, <2>4           
+            BY <2>1, <2>3, <2>4           
 <1>3. QED
       BY <1>1, <1>2
       
@@ -548,43 +499,13 @@ THEOREM Bags_SetToBagIsABag == ASSUME NEW S
 BY DEF IsABag, SetToBag
 
 (***************************************************************************)
-(* CopiesIn Distributes over Union Operator                                *)
-(***************************************************************************)
-                               
-THEOREM Bags_CopiesDistributesUnion == ASSUME NEW e, NEW B1, NEW B2, IsABag(B1), IsABag(B2)
-                                       PROVE CopiesIn(e, B1(+)B2)= CopiesIn(e, B1)+ CopiesIn(e, B2)
-PROOF
-<1>1. CASE BagIn(e, B1(+)B2)
-      BY <1>1 DEF BagIn, BagToSet, CopiesIn, (+)
-<1>2. CASE ~BagIn(e, B1(+)B2)
-      BY <1>2 DEF BagIn, BagToSet, CopiesIn, (+)
-<1>. QED
-     BY <1>1, <1>2
-
-
-THEOREM Bags_CopiesDistributesDifference == ASSUME NEW e, NEW B1, NEW B2, IsABag(B1), IsABag(B2)
-                                            PROVE CopiesIn(e, B1(-)B2)= IF BagIn(e, B1(-)B2) THEN CopiesIn(e, B1)-CopiesIn(e, B2) ELSE 0
-<1>1. CASE BagIn(e, B1(-)B2)
-
-      <2>1. SUFFICES CopiesIn(e, B1(-)B2)= CopiesIn(e, B1)-CopiesIn(e, B2)
-            BY <1>1
-      <2>2. e \in DOMAIN(B1(-)B2)
-            BY <1>1 DEF BagIn, BagToSet              
-      <2> QED
-          BY <2>2, SMT DEF CopiesIn     
-<1>2. CASE ~BagIn(e, B1(-)B2)
-      BY <1>2 DEF BagIn, BagToSet, CopiesIn, (-)
-<1>. QED
-     BY <1>1, <1>2
-     
-(***************************************************************************)
 (* CopiesIn Monotone w.r.t \sqsubseteq                                     *)
 (***************************************************************************)
   
-THEOREM Bags_CopiesInBagsInMonotone == ASSUME NEW B1, NEW B2, NEW e, IsABag(B1), IsABag(B2), B1 \sqsubseteq B2 
-                                 PROVE /\ BagIn(e, B1) => BagIn(e, B2)
-                                       /\ CopiesIn(e, B1) <= CopiesIn(e, B2)
-PROOF 
+THEOREM Bags_CopiesInBagsInMonotone ==
+  ASSUME NEW B1, NEW B2, NEW e, IsABag(B1), IsABag(B2), B1 \sqsubseteq B2 
+  PROVE  /\ BagIn(e, B1) => BagIn(e, B2)
+         /\ CopiesIn(e, B1) <= CopiesIn(e, B2)
 <1>1. ASSUME BagIn(e, B1) PROVE BagIn(e, B2)
       BY <1>1 DEF BagIn, BagToSet, \sqsubseteq
 <1>2. CopiesIn(e, B1) <= CopiesIn(e, B2)
@@ -630,31 +551,33 @@ PROOF
 (* Given sequence seq, SeqToBag(seq) is a Bag                              *)
 (***************************************************************************)
 
-THEOREM Bags_IsABagSeqToBag == ASSUME NEW S, NEW seq \in Seq(S)
-                               PROVE IsABag(SeqToBag(seq))
-<1>1. \A x \in DOMAIN SeqToBag(seq): SeqToBag(seq)[x] \in {n \in Nat: n>0}
-      <2>1. TAKE x \in DOMAIN SeqToBag(seq)
-      <2>2. SeqToBag(seq)[x] \in {n \in Nat: n>0}
-            <3>1. CASE seq = << >>
-                  <4>1. DOMAIN SeqToBag(seq)= {}
-                        BY <3>1 DEF Range, SeqToBag
-                  <4>2. QED
-                        BY <4>1, Bags_EmptyBag
-            <3>2. CASE seq # << >>
-                  <4>1. {i \in DOMAIN seq: seq[i]=x }#{}
-                        BY <2>1, <3>2 DEF SeqToBag, Range
-                  <4>.  IsFiniteSet({i \in DOMAIN seq: seq[i]=x })    
-                        <5>1. {i \in DOMAIN seq: seq[i]=x } \subseteq DOMAIN seq
-                              OBVIOUS
-                        <5>2. IsFiniteSet(DOMAIN seq) 
-                        <5>3. QED
-                              BY <5>1, <5>2, FS_Subset              
-                  <4>2. QED 
-                        BY <4>1, SMT, FS_EmptySet, FS_CardinalityType DEF SeqToBag                        
-            <3>3. QED
-                  BY <3>1, <3>2
-      <2>3. QED
-            BY <2>2 DEF SeqToBag
+THEOREM Bags_IsABagSeqToBag ==
+  ASSUME NEW S, NEW seq \in Seq(S)
+  PROVE  IsABag(SeqToBag(seq))
+<1>1. \A x \in DOMAIN SeqToBag(seq): SeqToBag(seq)[x] \in Nat \ {0}
+  <2>1. TAKE x \in DOMAIN SeqToBag(seq)
+  <2>2. SeqToBag(seq)[x] \in Nat \ {0}
+    <3>1. CASE seq = << >>
+       <4>1. DOMAIN SeqToBag(seq)= {}
+         BY <3>1 DEF Range, SeqToBag
+       <4>2. QED
+         BY <4>1, Bags_EmptyBag
+    <3>2. CASE seq # << >>
+       <4>1. {i \in DOMAIN seq: seq[i]=x }#{}
+         BY <2>1, <3>2 DEF SeqToBag, Range
+       <4>. IsFiniteSet({i \in DOMAIN seq: seq[i]=x })    
+         <5>1. {i \in DOMAIN seq: seq[i]=x } \subseteq DOMAIN seq
+            OBVIOUS
+         <5>2. IsFiniteSet(DOMAIN seq)
+           BY SeqDef, FS_Interval
+         <5>3. QED
+           BY <5>1, <5>2, FS_Subset              
+       <4>2. QED 
+         BY <4>1, SMT, FS_EmptySet, FS_CardinalityType DEF SeqToBag                        
+    <3>3. QED
+      BY <3>1, <3>2
+  <2>3. QED
+    BY <2>2 DEF SeqToBag
 <1>2. QED
       BY <1>1 DEF IsABag, SeqToBag
 

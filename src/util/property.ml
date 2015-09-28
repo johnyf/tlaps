@@ -7,7 +7,7 @@
 
 (** Property lists implemented using unsafe ocaml features *)
 
-Revision.f "$Rev: 29999 $";;
+Revision.f "$Rev: 32860 $";;
 
 open Ext
 
@@ -85,6 +85,17 @@ let noprops x = { core = x ; props = [] }
 
 let nowhere : unit wrapped = noprops ()
 
+(* adds (only) new properties from bw to aw *)
+let ( $$ ) aw bw =
+  let forall_fun i2 = function
+    | (Pid i,_) -> i <> i2
+    | _ -> true in
+  let filter_fun = function
+    | (Pid i,_) -> List.for_all (forall_fun i) aw.props
+    | _ -> true in
+  let pr = List.append aw.props (List.filter filter_fun bw.props) in
+  {aw with props = pr}
+
 let ( @@ ) a bw = { bw with core = a }
 
 let ( %% ) a ps = { core = a ; props = ps }
@@ -118,3 +129,12 @@ let unsafe_assign (a : 'a) pf v : 'a =
       Obj.repr (pf.set v :: List.filter (fun p -> pf.pid <> fst p) (props_of a))
     end ;
     Obj.obj br
+
+
+let print_prop = function
+  | (Pid i, _) -> print_int i
+  | (Puuid (i1,i2), _) ->  print_string (Int64.to_string i1); print_string (Int64.to_string i2)
+
+let print_all_props = function
+  | {props = ls} -> List.iter print_prop ls
+

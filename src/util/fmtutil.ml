@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 30204 $";;
+Revision.f "$Rev: 33816 $";;
 
 open Format
 
@@ -39,7 +39,7 @@ module type Minimal_sig = sig
   module Prec : Pars.Intf.Prec  (* The functor's argument: precedences *)
 
   (** Associativity *)
-  type assoc = Left | Right | Non
+  type assoc = Left | Non | Right
 
   (** Operators are an abstract representation of the operator
       component of a minimally parenthesized expression *)
@@ -55,7 +55,7 @@ module type Minimal_sig = sig
   and exp =
     | Atm of fmt
     | Big of fmt
-    | Op of fmt * Prec.prec * op
+    | Op of string * fmt * Prec.prec * op
 
   and fmt = formatter -> unit
 
@@ -69,7 +69,7 @@ module  Minimal (Prec : Pars.Intf.Prec) = struct
 
   open Prec
 
-  type assoc = Left | Right | Non
+  type assoc = Left | Non | Right
 
   type op =
     | Infix of assoc * exp * exp
@@ -79,71 +79,84 @@ module  Minimal (Prec : Pars.Intf.Prec) = struct
   and exp =
     | Atm of fmt
     | Big of fmt
-    | Op of fmt * prec * op
+    | Op of string * fmt * prec * op
 
   and fmt = formatter -> unit
 
-  let above p = function
-    | Op (_, q, _) -> Prec.below q p
-    | Big _ -> true
-    | Atm _ -> false
-
-  let overlaps p = function
-    | Op (_, q, _) -> Prec.conflict p q
+  let below p = function
+    | Op (_, _, q, _) -> Prec.below p q
     | Big _ -> false
-    | Atm _ -> false
+    | Atm _ -> true
 
   let assoc_of = function
-    | Op (_, _, Infix (a, _, _)) -> a
+    | Op (_, _, _, Infix (a, _, _)) -> a
     | _ -> Non
 
+  let name_of = function
+    | Op (n, _, _, _) -> n
+    | _ -> ""
+  ;;
+
   let is_prefix = function
-    | Op (_, _, Prefix _) -> true
+    | Op (_, _, _, Prefix _) -> true
     | _ -> false
 
   let is_postfix = function
-    | Op (_, _, Postfix _) -> true
+    | Op (_, _, _, Postfix _) -> true
     | _ -> false
+
+  let is_left a =
+    match a with
+    | Left -> true
+    | Non | Right -> false
+  ;;
+
+  let is_right a =
+    match a with
+    | Right -> true
+    | Non | Left -> false
+  ;;
 
   let rec pp_print_minimal ff : exp -> unit =
     let go = function
       | Atm af -> af ff
       | Big af -> af ff
-      | Op (af, ap, skel) -> begin
+      | Op (name, af, ap, skel) -> begin
           match skel with
             | Prefix b ->
-                pp_open_hbox ff () ;
+                pp_open_hbox ff ();
                 af ff ;
-                (* pp_print_cut ff () ; *)
-                if above ap b && not (is_prefix b) then
-                  pp_print_with_parens pp_print_minimal ff b
+                if below ap b || is_prefix b then
+                  pp_print_minimal ff b
                 else
-                  pp_print_minimal ff b ;
-                pp_close_box ff ()
+                  pp_print_with_parens pp_print_minimal ff b;
+                pp_close_box ff ();
             | Infix (ass, b, c) ->
-                pp_open_box ff 0 ;
-                if above ap b || (overlaps ap b && not ((assoc_of b = Left) && (ass = Left))) then
-                  pp_print_with_parens pp_print_minimal ff b
+                pp_open_box ff 0;
+                (* Parens can be omitted in two cases:
+                   1. if the associativity of ap is below that of b
+                   2. if both are the same left-associative operator *)
+                if below ap b || name_of b = name && is_left ass
+                then
+                  pp_print_minimal ff b
                 else
-                  pp_print_minimal ff b ;
-                (* pp_print_space ff () ; *)
-                 pp_print_space ff () ;
-                af ff ;
-                 pp_print_space ff () ;
-                if above ap c || (overlaps ap c && not ((assoc_of c = Right) && (ass = Right))) then
-                  pp_print_with_parens pp_print_minimal ff c
+                  pp_print_with_parens pp_print_minimal ff b;
+                af ff;
+                (* FIXME get rid of right-assoc after fixing \X *)
+                if below ap c || assoc_of c = ass && is_right ass then
+                  pp_print_minimal ff c
                 else
-                  pp_print_minimal ff c ;
-                pp_close_box ff ()
+                  pp_print_with_parens pp_print_minimal ff c;
+                pp_close_box ff ();
             | Postfix b ->
                 pp_open_hbox ff () ;
-                if above ap b && not (is_postfix b) then
-                  pp_print_with_parens pp_print_minimal ff b
+                if below ap b || is_postfix b then
+                  pp_print_minimal ff b
                 else
-                  pp_print_minimal ff b ;
-                af ff ;
-                pp_close_box ff ()
+                  pp_print_with_parens pp_print_minimal ff b;
+                af ff;
+                pp_close_box ff ();
         end
     in
-      go
+    go
 end

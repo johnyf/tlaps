@@ -4,7 +4,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32647 $";;
+Revision.f "$Rev: 34565 $";;
 
 open Ext
 open Printf;;
@@ -28,10 +28,10 @@ let nprocs = Sysconf.nprocs ()
 let timeout_stretch = ref 1.0;;
 
 let tb_sl = ref 0 (* toolbox start line *)
-let tb_el = ref 0 (* toolbox end line *)
+let tb_el = ref max_int (* toolbox end line *)
+let input_files = ref [];;  (* List of input file names *)
 
 let toolbox = ref false     (* Run in toolbox mode. *)
-let toolbox_all = ref false (* Consider the whole tla file. *)
 
 let no_fp = ref false
 (* Don't use the fingerprints but still save them with the old ones. *)
@@ -51,8 +51,6 @@ let wait = ref 3
 
 let noproving = ref false (* Don't send any obligation to the back-ends. *)
 
-let toolbox_killed = ref false (* true if the toolbox has killed the pm *)
-
 let printallobs = ref false
 (* print unnormalized and normalized versions of obligations in toolbox mode *)
 
@@ -68,7 +66,7 @@ type executable =
   | Unchecked of string * string * string (* exec, command, version_command *)
   | User of string                        (* command *)
   | Checked of string * string list       (* command, version *)
-  | NotFound
+  | NotFound of string
 ;;
 
 type exec = executable ref;;
@@ -98,14 +96,14 @@ let get_exec e =
         in
         let msg = msg1 ^ msg2 in
         eprintf "%s" msg;
-        e := NotFound;
-        raise Not_found;
+        e := NotFound msg;
+        failwith msg;
      end;
   | User (cmd) ->
      e := Checked (cmd, []);
      cmd
   | Checked (cmd, vers) -> cmd
-  | NotFound -> raise Not_found;
+  | NotFound msg -> failwith msg;
 ;;
 
 let get_version e =
@@ -163,7 +161,7 @@ let zenon =
 ;;
 
 let cvc3 = make_exec "cvc3" "cvc3 -lang smt2 \"$file\"" "cvc3 -version";;
-(* let cvc3 = make_exec "cvc3" "cvc4 --lang=smt2 \"$file\"" "cvc4 --version";; *)
+(* let cvc3 = make_exec "cvc3" "cvc4 -L smt2 \"$file\"" "cvc4 --version";; *)
 let yices = make_exec "yices" "yices -tc \"$file\"" "yices --version";;
 let z3 =
   if Sys.os_type = "Cygwin" then
@@ -183,6 +181,8 @@ let verit =
 ;;
 let spass = make_exec "SPASS" "SPASS -PGiven=0 -PProblem=0 -PStatistic=0 \"$file\"" "echo unknown";;
 let eprover = make_exec "eprover" "eprover --tstp-format --silent \"$file\"" "eprover --version";;
+
+let ls4 = make_exec "ls4" "ptl_to_trp -i $file | ls4" "echo unknown";;
 
 let smt =
   try ref (User (Sys.getenv "TLAPM_SMT_SOLVER"))
@@ -210,10 +210,10 @@ let output_dir = ref "."
 
 let default_method =
   ref [
+    Method.Smt3 Method.default_smt2_timeout;
     Method.Zenon Method.default_zenon_timeout;
     Method.Isabelle (Method.default_isabelle_timeout,
                      Method.default_isabelle_tactic);
-    Method.Smt3 Method.default_smt2_timeout;
   ]
 ;;
 
@@ -226,35 +226,15 @@ let mk_meth name timeout =
      let timeout = Option.default Method.default_isabelle_timeout timeout in
      Method.Isabelle (timeout, name)
   | "smt" ->
-     let timeout = Option.default Method.default_smt_timeout timeout in
-     Method.SmtT timeout
-  | "yices" ->
-     let timeout = Option.default Method.default_yices_timeout timeout in
-     Method.YicesT timeout
-  | "z3" ->
-     let timeout = Option.default Method.default_z3_timeout timeout in
-     Method.Z3T timeout
-  | "fail" ->
-     Method.Fail
-  | "cvc3" ->
-     let timeout = Option.default Method.default_cvc3_timeout timeout in
-     Method.Cvc3T timeout
-  | "smt2" ->
-     let timeout = Option.default Method.default_smt2_timeout timeout in
-     Method.Smt2lib timeout
-  | "smt2z3" ->
-     let timeout = Option.default Method.default_smt2_timeout timeout in
-     Method.Smt2z3 timeout
-  | "smt3" ->
      let timeout = Option.default Method.default_smt2_timeout timeout in
      Method.Smt3 timeout
-  | "z33" ->
+  | "z3" ->
      let timeout = Option.default Method.default_smt2_timeout timeout in
      Method.Z33 timeout
-  | "cvc33" ->
+  | "cvc3" ->
      let timeout = Option.default Method.default_smt2_timeout timeout in
      Method.Cvc33 timeout
-  | "yices3" ->
+  | "yices" ->
      let timeout = Option.default Method.default_smt2_timeout timeout in
      Method.Yices3 timeout
   | "verit" ->
@@ -266,6 +246,10 @@ let mk_meth name timeout =
   | "tptp" ->
      let timeout = Option.default Method.default_tptp_timeout timeout in
      Method.Tptp timeout
+  | "ls4" ->
+     let timeout = Option.default Method.default_ls4_timeout timeout in
+     Method.LS4 timeout
+  | "fail" -> Method.Fail
   | _ -> failwith (sprintf "unknown method %S" name)
 ;;
 
@@ -273,24 +257,19 @@ let mk_meth name timeout =
 let parse_default_methods s =
   if s = "help" then begin
     printf "configured methods:\n\n" ;
-    printf "  zenon  -- Zenon";
-    printf "  auto   -- Isabelle with \"auto\" tactic\n";
-    printf "  blast  -- Isabelle with \"blast\" tactic\n";
-    printf "  force  -- Isabelle with \"force\" tactic\n";
-    printf "  smt    -- Default SMT solver (deprecated)\n";
-    printf "  yices  -- Yices (deprecated)\n";
-    printf "  z3     -- Z3 (deprecated)\n";
-    printf "  cvc3   -- CVC3 (deprecated)\n";
-    printf "  smt2   -- Default SMT solver with new translation (deprecated)\n";
-    printf "  smt2z3 -- Z3 with new translation (deprecated)\n";
-    printf "  smt3   -- Default SMT solver with new translation\n";
-    printf "  z33    -- Z3\n";
-    printf "  cvc33  -- CVC3\n";
-    printf "  yices3 -- Yices\n";
-    printf "  verit  -- VeriT\n";
-    printf "  spass  -- SPASS\n";
+    printf "  zenon   -- Zenon\n";
+    printf "  auto    -- Isabelle with \"auto\" tactic\n";
+    printf "  blast   -- Isabelle with \"blast\" tactic\n";
+    printf "  force   -- Isabelle with \"force\" tactic\n";
+    printf "  smt     -- Default SMT solver\n";
+    printf "  z3      -- Z3\n";
+    printf "  cvc3    -- CVC3\n";
+    printf "  yices   -- Yices\n";
+    printf "  verit   -- VeriT\n";
+    printf "  spass   -- SPASS\n";
+    printf "  ls4     -- LS4\n";
     printf "\n" ;
-    printf "  fail   -- Dummy method that always fails\n" ;
+    printf "  fail    -- Dummy method that always fails\n" ;
     exit 0
   end else begin
     let f x =
@@ -352,7 +331,7 @@ let solve_cmd cmd file = sprintf "file=%s; %s" file (get_exec cmd);;
 
 let external_tool_config force (name, tool) =
   if force then begin
-    try ignore (get_exec tool) with Not_found -> ()
+    try ignore (get_exec tool) with Failure _ -> ()
   end;
   match !tool with
   | Checked (cmd, []) ->
@@ -360,8 +339,8 @@ let external_tool_config force (name, tool) =
   | Checked (cmd, v::_) ->
       [sprintf "%s == %S" name cmd;
        sprintf "%s version == %S" name v]
-  | NotFound ->
-      [sprintf "%s : command not found" name]
+  | NotFound msg ->
+      [msg]
   | _ -> []
 ;;
 
@@ -393,7 +372,9 @@ let configuration toolbox force =
                               ("Z3", z3);
                               ("VeriT", verit);
                               ("SMT", smt);
-                              ("Spass", spass)])
+                              ("Spass", spass);
+                              ("LS4", ls4);
+                             ])
     @ [ "flatten_obligations == " ^ (if !ob_flatten then "TRUE" else "FALSE")
       ; "normalize == " ^ (if !pr_normal then "TRUE" else "FALSE") ]
   in
@@ -431,7 +412,7 @@ let get_zenon_verfp () = if !zenon_version = None then check_zenon_ver ();
 let isabelle_version = ref None
 
 let check_isabelle_ver () =
-  (try ignore (get_exec isabelle) with Not_found -> ());
+  (try ignore (get_exec isabelle) with Failure _ -> ());
   match get_version isabelle with
   | [] -> ()
   | ret :: _ ->
@@ -455,3 +436,9 @@ let fp_original_number = ref (-1)
 let fp_hist_dir = ref ""
 
 let fp_deb = ref false
+
+let backend_timeout = ref 5.;;
+(** How much time a back-end is allowed to spend processing the obligation
+   before sending it to its external prover. This gets multiplied by
+   timeout_stretch before use.
+*)

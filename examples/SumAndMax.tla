@@ -109,15 +109,12 @@ THEOREM Spec => []Correctness
   <2> QED
     BY <2>1, <2>2, NType, SMT DEF Inv, TypeOK
 <1>4. QED
-  (*************************************************************************)
-  (* This follows from <1>1-<1>3 by trivial temporal reasoning, but TLAPS  *)
-  (* does not yet handle temporal logic.                                   *)
-  (*************************************************************************)
-  PROOF OMITTED
+  BY <1>1, <1>2, <1>3, PTL DEF Spec
 
 
 =============================================================================
 \* Modification History
+\* Last modified Wed Mar 12 16:00:40 CET 2014 by doligez
 \* Last modified Wed Nov 21 20:10:44 GMT-03:00 2012 by merz
 \* Last modified Wed Nov 21 20:01:30 GMT-03:00 2012 by merz
 \* Last modified Thu Oct 06 06:34:01 PDT 2011 by lamport

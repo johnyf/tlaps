@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 28687 $";;
+Revision.f "$Rev: 32860 $";;
 
 (** The TLA+ builtin operators *)
 type builtin =
@@ -18,7 +18,8 @@ type builtin =
   | Cup
     (* modal *)
   | Prime | StrongPrime | Leadsto | ENABLED | UNCHANGED | Cdot
-  | Actplus | Box of bool | Diamond
+  | Actplus | Box of bool (* the bool indicates an applitcation of the Box to a
+  non-temporal formula and is added in a post processing step *) | Diamond
     (* arithmetic *)
   | Nat | Int | Real | Plus | Minus | Uminus
   | Times | Ratio | Quotient | Remainder | Exp

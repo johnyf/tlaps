@@ -6,7 +6,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 28687 $";;
+Revision.f "$Rev: 34588 $";;
 
 open Ext
 open Proof.T
@@ -209,6 +209,12 @@ let fairness_op_to_int f =
   | Strong -> 1
 ;;
 
+let rec time_to_string = function
+  | Now -> "now"
+  | Always -> "always"
+  | NotSet -> assert false
+;;
+
 let to_string fp = Digest.to_hex (Digest.string (Buffer.contents fp))
 (* FIXME: remove conversion to hex, watch out for FP files. *)
 
@@ -225,9 +231,7 @@ let rec list ?(sep=fun buf -> bprintf buf ",") pr buf = function
 let fp_bin buf = function
   | Builtin.Box false -> Buffer.add_string buf "$FakeBox"
   | Builtin.Box true  -> Buffer.add_string buf "$Box"
-  | bin ->
-     assert (Obj.magic bin = builtin_to_int bin); (* FIXME remove after some testing *)
-     Printf.bprintf buf "$%d" (builtin_to_int bin);
+  | bin -> Printf.bprintf buf "$%d" (builtin_to_int bin);
 ;;
 
 let rec fp_expr counthyp countvar stack buf e =
@@ -425,14 +429,15 @@ and fp_sequent stack buf sq =
              spin stack cx;
              let v,r = Stack.pop stack in
              if !r then
-               bprintf buf "$Def(%d;)"
+               bprintf buf "$Def(%d,%d)"
                        (match v with Identhypi i -> i | _ -> assert false)
+                       (if Expr.Constness.is_const e then 0 else 3)
           | Defn ({core = Bpragma _}, _, Hidden, _) ->
              Stack.push stack (IdentBPragma, ref false);
              spin stack cx;
              ignore (Stack.pop stack)
           | Defn ({core = Instance _}, _, Hidden, _) -> assert false
-          | Fact (_, Hidden) ->
+          | Fact (_, Hidden, _) ->
               Stack.push stack (No(*Identvar "HIDDENFACT"*), ref false);
               spin stack cx ;
               ignore (Stack.pop stack)
@@ -443,7 +448,11 @@ and fp_sequent stack buf sq =
               let v,r = Stack.pop stack in
                 if !r then bprintf buf "$Dom(%d;%a)"
                   (match v with Identhypi i -> i | _ -> assert false)
-                  (fp_expr counthyp countvar stack) e ;
+                  (fp_expr counthyp countvar stack) e
+                else
+                  bprintf buf "$Dom(_;%a)" (fp_expr counthyp countvar stack) e
+                    (* bug 13-12-07 : must not suppress assumptions of the
+                       form "x \in S" even if x is not used. *)
           | Defn ({core = Operator (hint, e)}, _, Visible, _) ->
              Stack.push stack (Identhyp hint.core, ref false);
               spin stack cx;
@@ -457,11 +466,12 @@ and fp_sequent stack buf sq =
              spin stack cx;
              ignore (Stack.pop stack)
           | Defn ({core = Instance _}, _, Visible, _) -> assert false
-          | Fact (e, _) ->
+          | Fact (e, _, tm) ->
                Stack.push stack (Identhyp "None", ref false);
               spin stack cx;
               ignore (Stack.pop stack);
-              bprintf buf "$Fact(%a)" (fp_expr counthyp countvar stack) e ;
+              bprintf buf "$Fact(%a,%s)" (fp_expr counthyp countvar stack) e
+                      (time_to_string tm);
   in
   spin stack sq.context
 

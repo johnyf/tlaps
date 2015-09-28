@@ -1,4 +1,4 @@
------------------------ MODULE FiniteSetTheorems_test ------------------------
+---------------------- MODULE FiniteSetTheorems_test ------------------------
 (***************************************************************************)
 (* `^{\large\bf \vspace{12pt}                                              *)
 (*  Facts about finite sets and their cardinality.                         *)
@@ -8,10 +8,8 @@
 
 EXTENDS
   FiniteSets,
-  Naturals,
-  Integers,
   Sequences,
-  FunctionTheorems_test,
+  FunctionTheorems,
   WellFoundedInduction,
   TLAPS
 
@@ -22,21 +20,6 @@ LEMMA TwoExpLemma ==
   ASSUME NEW n \in Nat
   PROVE  2^(n+1) = 2^n + 2^n
 PROOF OMITTED
-
-(***************************************************************************)
-(* `.  .'                                                                  *)
-(*                                                                         *)
-(* Consequences of the definitions and other fundamental lemmas.           *)
-(*                                                                         *)
-(* `.  .'                                                                  *)
-(***************************************************************************)
-
-LEMMA FS_IsFiniteSetDef ==
-  ASSUME NEW S
-  PROVE  IsFiniteSet(S) <=>
-         \E Q \in Seq(S) : \A s \in S : \E i \in 1..Len(Q) : Q[i] = s
-BY DEF IsFiniteSet
-
 
 (***************************************************************************)
 (* `.  .'                                                                  *)
@@ -53,14 +36,14 @@ LEMMA FS_NatSurjection ==
 
 <1>1. ASSUME IsFiniteSet(S)  PROVE \E n \in Nat : ExistsSurjection(1..n,S)
   <2>1. PICK Q \in Seq(S) : \A s \in S : \E i \in 1..Len(Q) : Q[i] = s
-    BY <1>1, FS_IsFiniteSetDef
+    BY <1>1 DEF IsFiniteSet
   <2>2. /\ Len(Q) \in Nat
         /\ Q \in Surjection(1..Len(Q),S)
-    BY <2>1, SMT DEF Surjection
+    BY <2>1 DEF Surjection
   <2> QED BY <2>2 DEF ExistsSurjection
 
 <1>2. ASSUME NEW n \in Nat, ExistsSurjection(1..n,S)  PROVE  IsFiniteSet(S)
-  BY SMT, <1>2, FS_IsFiniteSetDef DEF ExistsSurjection, Surjection
+  BY <1>2 DEF IsFiniteSet, ExistsSurjection, Surjection
 
 <1> QED BY <1>1, <1>2
 
@@ -248,7 +231,7 @@ PROOF
 THEOREM FS_SurjCardinalityBound ==
   ASSUME NEW S, NEW n \in Nat, ExistsSurjection(1..n, S)
   PROVE  Cardinality(S) <= n
-BY SMT, Fun_NatSurjImpliesNatBij, FS_CountingElements
+BY Fun_NatSurjImpliesNatBij, FS_CountingElements
 
 
 (***************************************************************************)
@@ -314,21 +297,21 @@ THEOREM FS_SurjSameCardinalityImpliesInj ==
           /\ \/ g[i] = a /\ g[j] = b
              \/ g[i] = b /\ g[j] = a
   <2>1. PICK i,j \in 1 .. n : i # j /\ g[i] = a /\ g[j] = b
-    BY SMT, <1>1 DEF Bijection, Surjection
+    BY <1>1 DEF Bijection, Surjection
   <2>2. CASE i < j  BY <2>1, <2>2
   <2>3. CASE i > j  BY <2>1, <2>3
-  <2>. QED  BY SMT, <2>1, <2>2, <2>3
-<1>. n-1 \in Nat  BY SMT, <1>2
+  <2>. QED  BY <2>1, <2>2, <2>3
+<1>. n-1 \in Nat  BY <1>2
 <1>. DEFINE h == [ k \in 1 .. n-1 |-> IF k=j THEN f[g[n]] ELSE f[g[k]] ]
 <1>3. h \in Surjection(1..n-1, T)
-  <2>1. h \in [1..n-1 -> T]  BY SMT DEF Bijection, Surjection
+  <2>1. h \in [1..n-1 -> T]  BY DEF Bijection, Surjection
   <2>2. ASSUME NEW t \in T  PROVE \E k \in 1..n-1 : h[k] = t
     <3>1. PICK s \in S : f[s] = t  BY DEF Surjection
     <3>2. PICK l \in 1..n : g[l] = s  BY DEF Bijection, Surjection
-    <3>. QED  BY SMT, <1>1, <1>2, <3>1, <3>2
+    <3>. QED  BY <1>1, <1>2, <3>1, <3>2
   <2>. QED  BY <2>1, <2>2 DEF Surjection
 <1>4. Cardinality(T) <= n-1  BY <1>3, FS_SurjCardinalityBound DEF ExistsSurjection
-<1>. QED  BY SMT, <1>4
+<1>. QED  BY <1>4
 
 
 (***************************************************************************)
@@ -376,7 +359,7 @@ THEOREM FS_EmptySet ==
   /\ \A S : IsFiniteSet(S) => (Cardinality(S) = 0 <=> S = {})
 
 <1>1. IsFiniteSet({}) /\ Cardinality({}) = 0
-  BY Fun_NatBijEmpty, FS_NatBijection, FS_CountingElements
+  BY Fun_NatBijEmpty, FS_NatBijection, FS_CountingElements, Zenon
 <1>2. ASSUME NEW S, IsFiniteSet(S), Cardinality(S) = 0
       PROVE  S = {}
   BY <1>2, FS_CardinalityType, Fun_NatBijEmpty
@@ -397,7 +380,7 @@ THEOREM FS_AddElement ==
          /\ Cardinality(S \cup {x}) =
             IF x \in S THEN Cardinality(S) ELSE Cardinality(S)+1
 <1>1. CASE x \notin S
-  BY SMT, <1>1, FS_CardinalityType, Fun_NatBijAddElem, FS_NatBijection, 
+  BY <1>1, FS_CardinalityType, Fun_NatBijAddElem, FS_NatBijection, 
      FS_CountingElements
 <1>. QED  BY <1>1  \* the case "x \in S" is trivial
 
@@ -408,7 +391,7 @@ THEOREM FS_RemoveElement ==
          /\ Cardinality(S \ {x}) =
             IF x \in S THEN Cardinality(S)-1 ELSE Cardinality(S)
 <1>1. CASE x \in S
-  BY SMT, <1>1, FS_CardinalityType, Fun_NatBijSubElem, FS_NatBijection, 
+  BY <1>1, FS_CardinalityType, Fun_NatBijSubElem, FS_NatBijection, 
      FS_CountingElements, FS_EmptySet
 <1>. QED  BY <1>1  \* the case "x \notin S" is trivial
 
@@ -425,7 +408,7 @@ THEOREM FS_Singleton ==
   /\ \A S : IsFiniteSet(S) => (Cardinality(S) = 1 <=> \E x: S = {x})
 
 <1>1. \A x : IsFiniteSet({x}) /\ Cardinality({x}) = 1
-  BY SMT, FS_EmptySet, FS_AddElement
+  BY FS_EmptySet, FS_AddElement
 <1>2. ASSUME NEW S, IsFiniteSet(S), Cardinality(S) = 1
       PROVE  \E x : S = {x}
   BY <1>2, FS_CardinalityType, Fun_NatBijSingleton
@@ -462,7 +445,7 @@ THEOREM FS_Subset ==
   <2>3. T \subseteq S \ {x}  BY <2>1
   <2>4. PICK m \in Nat : ExistsBijection(1..m, T) /\ m <= Cardinality(S)-1
     BY <2>2, <2>3, FS_CardinalityType, Fun_NatBijSubset
-  <2>. QED  BY SMT, <2>4, <1>3, FS_CountingElements
+  <2>. QED  BY <2>4, <1>3, FS_CountingElements
 <1>. QED  BY <1>2, <1>3, FS_NatBijection, FS_CountingElements
 
 
@@ -480,11 +463,11 @@ THEOREM FS_Interval ==
          /\ Cardinality(a..b) = IF a > b THEN 0 ELSE b-a+1
 
 <1>1. CASE a <= b
-  BY SMT, <1>1, Fun_ExistsBijInterval, FS_NatBijection, FS_CountingElements
+  BY <1>1, Fun_ExistsBijInterval, FS_NatBijection, FS_CountingElements
 <1>2. CASE a > b  
-  <2>1. a..b = {}  BY SMT, <1>2
-  <2>. QED  BY <2>1, <1>2, FS_EmptySet
-<1>. QED  BY SMT, <1>1, <1>2
+  <2>1. a..b = {}  BY <1>2
+  <2>. QED  BY <2>1, <1>2, FS_EmptySet, Zenon
+<1>. QED  BY <1>1, <1>2
 
 
 THEOREM FS_BoundedSetOfNaturals ==
@@ -492,9 +475,9 @@ THEOREM FS_BoundedSetOfNaturals ==
          \A s \in S : s <= n
   PROVE  /\ IsFiniteSet(S)
          /\ Cardinality(S) \leq n+1
-<1>1. S \subseteq 0 .. n  BY SMT
-<1>2. IsFiniteSet(0..n) /\ Cardinality(0..n) = n+1  BY Isa, FS_Interval
-<1>. QED  BY <1>1, <1>2, FS_Subset
+<1>1. S \subseteq 0 .. n  OBVIOUS
+<1>2. IsFiniteSet(0..n) /\ Cardinality(0..n) = n+1  BY FS_Interval
+<1>. QED  BY <1>1, <1>2, FS_Subset, Zenon
 
 
 (***************************************************************************)
@@ -513,14 +496,14 @@ THEOREM FS_Induction ==
   PROVE  P(S)
 <1>.  DEFINE Q(n) == \A T : IsFiniteSet(T) /\ Cardinality(T) = n => P(T)
 <1>1. SUFFICES \A n \in Nat : Q(n)  BY FS_CardinalityType
-<1>2. Q(0)  BY FS_EmptySet
+<1>2. Q(0)  BY FS_EmptySet, Zenon
 <1>3. ASSUME NEW n \in Nat, Q(n),
              NEW T, IsFiniteSet(T), Cardinality(T) = n+1
       PROVE  P(T)
-  <2>1. PICK x \in T : TRUE  BY SMT, <1>3, FS_EmptySet
+  <2>1. PICK x \in T : TRUE  BY <1>3, FS_EmptySet
   <2>2. /\ IsFiniteSet(T \ {x})
         /\ Cardinality(T \ {x}) = n
-    BY Isa, <1>3, FS_RemoveElement
+    BY <1>3, FS_RemoveElement, Isa
   <2>3. P(T \ {x})  BY <2>2, Q(n)
   <2>4. P((T \ {x}) \cup {x})  BY <2>2, <2>3
   <2>. QED  BY <2>4
@@ -561,10 +544,10 @@ THEOREM FS_StrictSubsetOrderingWellFounded ==
   BY FS_CardinalityType, FS_Subset DEF FiniteSubsetsOf
 <1>2. IsWellFoundedOn(PreImage(Cardinality, FiniteSubsetsOf(S), OpToRel(<,Nat)),
                        FiniteSubsetsOf(S))
-  BY Isa, <1>1, PreImageWellFounded, NatLessThanWellFounded
+  BY <1>1, PreImageWellFounded, NatLessThanWellFounded, Isa
 <1>3. StrictSubsetOrdering(S) \cap (FiniteSubsetsOf(S) \X FiniteSubsetsOf(S))
        \subseteq PreImage(Cardinality, FiniteSubsetsOf(S), OpToRel(<, Nat))
-  BY SMT, FS_Subset, <1>1
+  BY FS_Subset, <1>1
      DEF StrictSubsetOrdering, FiniteSubsetsOf, PreImage, OpToRel
 <1>. QED  BY <1>2, <1>3, IsWellFoundedOnSubrelation
 
@@ -586,13 +569,13 @@ THEOREM FS_WFInduction ==
   PROVE  P(S)
 <1>. DEFINE SubS == SUBSET S
 <1>1. IsWellFoundedOn(StrictSubsetOrdering(S), SubS)
-  BY FS_FiniteSubsetsOfFinite, FS_StrictSubsetOrderingWellFounded
+  BY FS_FiniteSubsetsOfFinite, FS_StrictSubsetOrderingWellFounded, Zenon
 <1>2. \A T \in SubS : 
           (\A U \in SetLessThan(T, StrictSubsetOrdering(S), SubS) : P(U))
           => P(T)
   BY DEF SetLessThan, StrictSubsetOrdering
 <1>. HIDE DEF SubS
-<1>3. \A T \in SubS : P(T)  BY ONLY <1>1, <1>2, WFInduction, Blast
+<1>3. \A T \in SubS : P(T)  BY ONLY <1>1, <1>2, WFInduction, IsaM("blast")
 <1>. QED  BY <1>3 DEF SubS
 
 
@@ -613,10 +596,10 @@ THEOREM FS_Union ==
 <1>. DEFINE P(A) == /\ IsFiniteSet(S \cup A)
                     /\ Cardinality(S \cup A) =
                            Cardinality(S) + Cardinality(A) - Cardinality(S \cap A)
-<1>1. P({})  BY Isa, FS_EmptySet, FS_CardinalityType
+<1>1. P({})  BY FS_EmptySet, FS_CardinalityType
 <1>2. ASSUME NEW A, NEW x, IsFiniteSet(A), P(A), x \notin A
       PROVE  P(A \cup {x})
-  <2>1. IsFiniteSet(S \cup (A \cup {x}))  BY Isa, P(A), FS_AddElement
+  <2>1. IsFiniteSet(S \cup (A \cup {x}))  BY P(A), FS_AddElement, Isa
   <2>. /\ IsFiniteSet(S \cup A)
        /\ IsFiniteSet(S \cap A)
        /\ Cardinality(S) \in Nat
@@ -626,20 +609,20 @@ THEOREM FS_Union ==
   <2>2. Cardinality(A \cup {x}) = Cardinality(A) + 1
     BY <1>2, FS_AddElement
   <2>3. CASE x \in S
-    <3>1. Cardinality(S \cup (A \cup {x})) = Cardinality(S \cup A)  BY <2>3
-    <3>2. Cardinality(S \cap (A \cup {x})) = Cardinality((S \cap A) \cup {x})  BY <2>3
+    <3>1. Cardinality(S \cup (A \cup {x})) = Cardinality(S \cup A)  BY <2>3, Zenon
+    <3>2. Cardinality(S \cap (A \cup {x})) = Cardinality((S \cap A) \cup {x})  BY <2>3, Zenon
     <3>3. Cardinality(S \cap (A \cup {x})) = Cardinality(S \cap A) + 1
       BY <3>2, <1>2, FS_AddElement
-    <3>. QED  BY SMT, <3>1, <3>3, <2>2, <2>1, P(A)
+    <3>. QED  BY <3>1, <3>3, <2>2, <2>1, P(A)
   <2>4. CASE x \notin S
     <3>1. Cardinality((S \cup A) \cup {x}) = Cardinality(S \cup A) + 1
       BY <1>2, <2>4, FS_AddElement
-    <3>1a. Cardinality(S \cup (A \cup {x})) = Cardinality(S \cup A) + 1  BY <3>1
-    <3>2. Cardinality(S \cap (A \cup {x})) = Cardinality(S \cap A)  BY <2>4 
-    <3>. QED  BY SMT, <3>1a, <3>2, <2>2, <2>1, P(A)
+    <3>1a. Cardinality(S \cup (A \cup {x})) = Cardinality(S \cup A) + 1  BY <3>1, Zenon
+    <3>2. Cardinality(S \cap (A \cup {x})) = Cardinality(S \cap A)  BY <2>4, Zenon
+    <3>. QED  BY <3>1a, <3>2, <2>2, <2>1, P(A)
   <2>. QED  BY <2>3, <2>4
 <1>. HIDE DEF P
-<1>. P(T)  BY Blast, <1>1, <1>2, FS_Induction
+<1>. P(T)  BY <1>1, <1>2, FS_Induction, IsaM("blast")
 <1>. QED  BY DEF P
 
 
@@ -669,9 +652,9 @@ THEOREM FS_MajoritiesIntersect ==
   BY FS_Subset, FS_CardinalityType
 <1>1. Cardinality(S \cup T) =
         Cardinality(S) + Cardinality(T) - Cardinality(S \cap T)
-  BY FS_Union
-<1>2. Cardinality(S \cap T) # 0  BY <1>1, SMT
-<1>3. QED  BY <1>2, FS_EmptySet
+  BY FS_Union, Zenon
+<1>2. Cardinality(S \cap T) # 0  BY <1>1
+<1>3. QED  BY <1>2, FS_EmptySet, Zenon
 
 
 
@@ -713,12 +696,12 @@ THEOREM FS_Difference ==
      /\ Cardinality(S \cap T) \in Nat
   BY FS_Subset, FS_CardinalityType
 <1>2. Cardinality(S \ T) = Cardinality(S) - Cardinality(S \cap T)
-  <2>1. Cardinality(S) = Cardinality((S \cap T) \cup (S \ T))  OBVIOUS
+  <2>1. Cardinality(S) = Cardinality((S \cap T) \cup (S \ T))  BY Zenon
   <2>2. Cardinality((S \cap T) \cup (S \ T)) = 
         Cardinality(S \cap T) + Cardinality(S \ T) - Cardinality((S \cap T) \cap (S \ T))
-    BY FS_Union
-  <2>3. Cardinality((S \cap T) \cap (S \ T)) = 0  BY FS_EmptySet
-  <2>. QED  BY <2>1, <2>2, <2>3, SMT
+    BY FS_Union, Zenon
+  <2>3. Cardinality((S \cap T) \cap (S \ T)) = 0  BY FS_EmptySet, Zenon
+  <2>. QED  BY <2>1, <2>2, <2>3
 <1>3. QED  BY <1>2
       
 
@@ -738,9 +721,9 @@ THEOREM FS_UNION ==
 <1>1. P({})  BY FS_EmptySet
 <1>2. ASSUME NEW U, NEW x, P(U), x \notin U
       PROVE  P(U \cup {x})
-  BY Isa, <1>2, FS_Union
+  BY <1>2, FS_Union, Isa
 <1>. HIDE DEF P
-<1>. P(S)  BY Blast, <1>1, <1>2, FS_Induction
+<1>. P(S)  BY <1>1, <1>2, FS_Induction, IsaM("blast")
 <1>. QED  BY DEF P
 
 
@@ -761,13 +744,13 @@ THEOREM FS_Product ==
 <1>. DEFINE P(A) == /\ IsFiniteSet(S \X A)
                     /\ Cardinality(S \X A) = Cardinality(S) * Cardinality(A)
 <1>1. P({})
-  <2>. /\ S \X {} = {}
-       /\ IsFiniteSet(S \X {})
-       /\ Cardinality(S \X {}) = 0
-       /\ Cardinality({}) = 0
-       /\ Cardinality(S) \in Nat
-    BY FS_EmptySet, FS_CardinalityType
-  <2>. QED  BY SMT
+  <2>1. /\ S \X {} = {}
+        /\ IsFiniteSet(S \X {})
+        /\ Cardinality(S \X {}) = 0
+        /\ Cardinality({}) = 0
+        /\ Cardinality(S) \in Nat
+    BY FS_EmptySet, FS_CardinalityType, Zenon
+  <2>. QED  BY <2>1
 <1>2. ASSUME NEW A, NEW x, IsFiniteSet(A), P(A), x \notin A
       PROVE  P(A \cup {x})
   <2>. /\ Cardinality(A) \in Nat
@@ -778,7 +761,7 @@ THEOREM FS_Product ==
         /\ Cardinality(A \cup {x}) = Cardinality(A) + 1
     BY <1>2, FS_AddElement
   <2>2. S \X (A \cup {x}) = (S \X A) \cup SX
-    BY Isa, <1>2
+    BY <1>2, Isa
   <2>3. ExistsBijection(S, SX)
     <3>. DEFINE f  == [s \in S |-> <<s,x>>]
     <3>. f \in Bijection(S, SX)  BY DEF Bijection, Injection, Surjection
@@ -789,12 +772,12 @@ THEOREM FS_Product ==
   <2>5. /\ IsFiniteSet(S \X (A \cup {x}))
          /\ Cardinality(S \X (A \cup {x})) = 
               Cardinality(S \X A) + Cardinality(SX) - Cardinality((S \X A) \cap SX) 
-    BY Isa, <2>2, <2>4, P(A), FS_Union
-  <2>6. (S \X A) \cap SX = {}  BY Isa, <1>2
-  <2>7. Cardinality((S \X A) \cap SX) = 0  BY <2>6, FS_EmptySet
-  <2>. QED  BY SMT, <2>1, <2>5, <2>4, <2>7, P(A)
+    BY <2>2, <2>4, P(A), FS_Union, Isa
+  <2>6. (S \X A) \cap SX = {}  BY <1>2
+  <2>7. Cardinality((S \X A) \cap SX) = 0  BY <2>6, FS_EmptySet, Zenon
+  <2>. QED  BY <2>1, <2>5, <2>4, <2>7, P(A)
 <1>. HIDE DEF P
-<1>. P(T)  BY Blast, <1>1, <1>2, FS_Induction
+<1>. P(T)  BY <1>1, <1>2, FS_Induction, IsaM("blast")
 <1>. QED  BY DEF P
 
 
@@ -817,38 +800,37 @@ THEOREM FS_SUBSET ==
 <1>1. P({})
   <2>1. /\ IsFiniteSet({{}})
         /\ Cardinality({{}}) = 1
-    BY FS_Singleton
-  <2>2. 1 = 2^0  BY SMT
-  <2>. QED  BY <2>1, <2>2, FS_EmptySet
+    BY FS_Singleton, Zenon
+  <2>2. 1 = 2^0  OBVIOUS
+  <2>. QED  BY <2>1, <2>2, FS_EmptySet, Zenon
 <1>2. ASSUME NEW A, NEW x, IsFiniteSet(A), x \notin A, P(A)
       PROVE  P(A \cup {x})
   <2>. DEFINE Ax == {B \cup {x} : B \in SUBSET A}
   <2>1. Cardinality(A \cup {x}) = Cardinality(A) + 1  BY <1>2, FS_AddElement
   <2>2. 2^Cardinality(A \cup {x}) = 2^Cardinality(A) + 2^Cardinality(A)
-    BY <2>1, <1>2, FS_CardinalityType, TwoExpLemma
-  <2>3. SUBSET (A \cup {x}) = (SUBSET A) \cup Ax  BY Isa, <1>2
+    BY <2>1, <1>2, FS_CardinalityType, TwoExpLemma, Zenon
+  <2>3. SUBSET (A \cup {x}) = (SUBSET A) \cup Ax  BY <1>2, Isa
   <2>4. ExistsBijection(SUBSET A, Ax)
     <3>. DEFINE f == [B \in SUBSET A |-> B \cup {x}]
-    <3>1. f \in [SUBSET A -> Ax]  OBVIOUS
-    <3>2. ASSUME NEW B \in SUBSET A, NEW C \in SUBSET A, f[B] = f[C]
+    <3>1. ASSUME NEW B \in SUBSET A, NEW C \in SUBSET A, f[B] = f[C]
           PROVE  B = C
-      BY <3>2, <1>2
-    <3>3. f \in Surjection(SUBSET A, Ax)  BY DEF Surjection
-    <3>4. f \in Bijection(SUBSET A, Ax)
-      BY <3>1, <3>2, <3>3 DEF Bijection, Injection
-    <3>. QED  BY <3>4 DEF ExistsBijection
+      BY <3>1, <1>2, Zenon
+    <3>2. f \in Surjection(SUBSET A, Ax)  BY DEF Surjection
+    <3>3. f \in Bijection(SUBSET A, Ax)
+      BY <3>1, <3>2 DEF Bijection, Injection
+    <3>. QED  BY <3>3 DEF ExistsBijection
   <2>5. /\ IsFiniteSet(Ax)
         /\ Cardinality(Ax) = Cardinality(SUBSET A)
     BY <2>4, P(A), FS_Bijection
   <2>6. /\ IsFiniteSet(SUBSET (A \cup {x}))
         /\ Cardinality(SUBSET (A \cup {x})) =
              Cardinality(SUBSET A) + Cardinality(Ax) - Cardinality((SUBSET A) \cap Ax)
-    BY Isa, <2>3, <2>5, P(A), FS_Union
+    BY <2>3, <2>5, P(A), FS_Union, Isa
   <2>7. (SUBSET A) \cap Ax = {}  BY <1>2
-  <2>8. Cardinality((SUBSET A) \cap Ax) = 0  BY <2>7, FS_EmptySet
-  <2>. QED  BY SMT, <2>2, <2>5, <2>6, <2>8, P(A), FS_CardinalityType
+  <2>8. Cardinality((SUBSET A) \cap Ax) = 0  BY <2>7, FS_EmptySet, Zenon
+  <2>. QED  BY <2>2, <2>5, <2>6, <2>8, P(A), FS_CardinalityType
 <1>. HIDE DEF P
-<1>. P(S)  BY Blast, <1>1, <1>2, FS_Induction
+<1>. P(S)  BY <1>1, <1>2, FS_Induction, IsaM("blast")
 <1>. QED  BY DEF P
 
 
@@ -858,7 +840,9 @@ THEOREM FS_SUBSET ==
     
 =============================================================================
 \* Modification History
-\* Last modified Thu Jul 11 18:14:06 CEST 2013 by merz
+\* Last modified Sat Sep 13 16:37:14 CEST 2014 by shaolin
+\* Last modified Sat Aug 16 20:19:14 CEST 2014 by tomer
+\* Last modified Fri Feb 14 21:35:15 GMT-03:00 2014 by merz
 \* Last modified Thu Jul 04 15:15:07 CEST 2013 by bhargav
 \* Last modified Tue Jun 04 11:44:51 CEST 2013 by bhargav
 \* Last modified Fri May 03 12:02:51 PDT 2013 by tomr

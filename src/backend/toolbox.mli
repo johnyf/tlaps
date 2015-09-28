@@ -2,9 +2,19 @@
  * Copyright (C) 2011  INRIA and Microsoft Corporation
  *)
 
+val is_stopped : unit -> bool;;
+(** Look in standard input for a STOP instruction from the toolbox, return
+    true iff this instruction was received.
+*)
+val get_kills : unit -> int list;;
+(** Look in standard input for KILL instructions from the toolbox, return
+    the list of corresponding task numbers.
+*)
+
 (* backend/isabelle.ml *)
 val toolbox_print :
   Proof.T.obligation ->
+  ?temp:bool ->
   string ->
   string option ->
   string option ->

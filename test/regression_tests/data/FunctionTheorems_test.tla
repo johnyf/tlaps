@@ -1,14 +1,14 @@
------------------------ MODULE FunctionTheorems_test ------------------------
+--------------------- MODULE FunctionTheorems_test --------------------------
 (***************************************************************************)
-(* `^{\large\bf \vspace{12pt}                                              *)
-(*  Facts about functions.                                                 *)
+(* `^{\large \vspace{12pt}                                                 *)
+(*  Proofs of facts about functions.                                       *)
 (*  Originally contributed by Tom Rodeheffer, MSR.                         *)
 (*  \vspace{12pt}}^'                                                       *)
 (***************************************************************************)
 
 EXTENDS
-  Naturals,
   Functions,
+  Integers,
   NaturalsInduction,
   WellFoundedInduction,
   TLAPS
@@ -25,7 +25,6 @@ THEOREM Fun_RestrictProperties ==
   PROVE  /\ Restrict(f,A) \in [A -> T]
          /\ \A x \in A : Restrict(f,A)[x] = f[x]
 BY DEF Restrict
-
 
 (***************************************************************************)
 (* `.  .'                                                                  *)
@@ -287,7 +286,7 @@ BY DEF Bijection, Injection, Surjection, Range
 
 -----------------------------------------------------------------------------
 (***************************************************************************)
-(* `^{\large\bf \vspace{12pt}                                              *)
+(* `^{\large \vspace{12pt}                                                 *)
 (*  Facts about exists jections.                                           *)
 (*  \vspace{12pt}}^'                                                       *)
 (***************************************************************************)
@@ -414,7 +413,7 @@ BY Fun_SurjTransitive DEF ExistsSurjection
 
 -----------------------------------------------------------------------------
 (***************************************************************************)
-(* `^{\large\bf \vspace{12pt}                                              *)
+(* `^{\large \vspace{12pt}                                                 *)
 (* The Cantor-Bernstein-Schroeder theorem.                                 *)
 (*  \vspace{12pt}}^'                                                       *)
 (***************************************************************************)
@@ -429,7 +428,7 @@ BY Fun_SurjTransitive DEF ExistsSurjection
 (* A lemma for the Cantor-Bernstein-Schroeder theorem.                     *)
 (*                                                                         *)
 (* This proof is formalized from                                           *)
-(* `^\url{http://www.proofwiki.org/wiki/Cantor-Bernstein-Schroeder_Theorem/Lemma}^' *)
+(* `^\url{http://www.proofwiki.org/wiki/Cantor-Bernstein-Schroeder\_Theorem/Lemma}^' *)
 (* retrieved April 29, 2013.                                               *)
 (*                                                                         *)
 (* `.  .'                                                                  *)
@@ -673,7 +672,7 @@ THEOREM Fun_ExistsBijEquiv ==
 
 -----------------------------------------------------------------------------
 (***************************************************************************)
-(* `^{\large\bf \vspace{12pt}                                              *)
+(* `^{\large \vspace{12pt}                                                 *)
 (*  Facts about jections involving 1..n.                                   *)
 (*  \vspace{12pt}}^'                                                       *)
 (***************************************************************************)
@@ -941,7 +940,7 @@ THEOREM Fun_NatBijSubElem ==
 
 =============================================================================
 \* Modification History
-\* Last modified Thu Jul 11 11:23:00 CEST 2013 by merz
+\* Last modified Fri Feb 14 21:36:05 GMT-03:00 2014 by merz
 \* Last modified Tue Jun 11 12:30:05 CEST 2013 by bhargav
 \* Last modified Fri May 31 15:27:41 CEST 2013 by bhargav
 \* Last modified Fri May 03 12:55:32 PDT 2013 by tomr

@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 28687 $";;
+Revision.f "$Rev: 34455 $";;
 
 open Property
 open Util
@@ -157,15 +157,24 @@ and hyp_ =
   | Fresh of hint * shape * kind * hdom
   | Flex of hint
   | Defn of defn * wheredef * visibility * export
-  | Fact of expr * visibility
+  | Fact of expr * visibility * time
 
 and hdom = Unbounded | Bounded of expr * visibility
 
-and wheredef = Builtin | Proof | User
+and wheredef = Builtin | Proof of time | User
 
 and export = Local | Export
 
 and visibility = Visible | Hidden
+
+and time = Now | Always | NotSet (* this value exists because when we create
+facts, we need to wait for later normalization in order to know if the terms are
+constants or not *)
+
+(* context helper function *)
+let get_val_from_id cx n = match Deque.nth ~backwards:true cx (n - 1) with
+| Some e -> e
+| None -> failwith "unknown bound variable"
 
 let hyp_name h = match h.core with
   | Fresh (nm, _, _, _)
@@ -174,7 +183,7 @@ let hyp_name h = match h.core with
                   | Bpragma(nm,_,_) | Recursive (nm, _)},
           _, _, _)
   -> nm.core
-  | Fact (_, _) -> "_"
+  | Fact (_, _,_) -> "_"
 
 let exprify_sequent sq =
   if Deque.null sq.context

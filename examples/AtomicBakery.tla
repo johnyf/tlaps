@@ -236,18 +236,17 @@ Inv == TypeOK /\ \A i \in P : IInv(i)
 (* This is a standard invariance proof, where <1>2 asserts that any step   *)
 (* of the algorithm (including a stuttering step) starting in a state in   *)
 (* which Inv is true leaves Inv true.  Step <1>4 follows easily from       *)
-(* <1>1-<1>3 by simple temporal reasoning, but TLAPS does not yet do any   *)
-(* temporal reasoning.                                                     *)
+(* <1>1-<1>3 by simple temporal reasoning.                                 *)
 (***************************************************************************)
 THEOREM Spec => []MutualExclusion
 <1> USE N \in Nat DEFS P, Inv, IInv, TypeOK, After, LL, ProcSet 
 <1>1. Init => Inv
   BY SMT DEF Init
 <1>2. Inv /\ [Next]_vars => Inv'
-  BY SMTT(20) DEF Next,  p, p1, p2, p3, p4, p5, p6, cs, p7, vars
+  BY SMTT(60) DEF Next,  p, p1, p2, p3, p4, p5, p6, cs, p7, vars
 <1>3. Inv => MutualExclusion
   BY SMT DEFS MutualExclusion 
 <1>4. QED
-  PROOF OMITTED
+  BY ONLY <1>1,<1>2,<1>3,PTL DEF Spec
 =============================================================================
 

@@ -5,8 +5,16 @@ set -e
 OLDPWD="`pwd`"
 
 TLAPSVER="$(echo "tlaps-@VERSION@" | sed -e 's/ /_/g')-@host_cpu@-@host_os@"
-TARGET_FILE="$TLAPSVER-inst@EXE@"
+
+case "@EXE@" in
+  "") TARGET_FILE="$TLAPSVER-inst.bin";;
+  *) TARGET_FILE="$TLAPSVER-inst@EXE@";;
+esac
 TARGET="$OLDPWD/$TARGET_FILE"
+
+if test -z "${SVN_PATH}"; then
+    SVN_PATH=`svn info ../../.. | sed -n -e 's,^URL: .*repository/tla/,,p'`
+fi
 
 cat <<EOF
 
@@ -14,6 +22,7 @@ This script builds a binary distribution of the TLA+ Proof System
 version @VERSION@, compiled with OCaml version @OCAMLCVER@.
 
 Target: ${TARGET}
+SVN branch: ${SVN_PATH}
 
 EOF
 
@@ -21,16 +30,12 @@ if test -z "${MSR_SVN_USER}" ; then
     MSR_SVN_USER=${USER}
 fi
 
-if test -z "${SVN_PATH}"; then
-    SVN_PATH=trunk
-fi
-
 repos="svn+ssh://${MSR_SVN_USER}@svn.msr-inria.inria.fr/var/lib/svn/repository/tla"
 
 svn_export() {
    repo_path=${repos}/$1
    target=$2
-   svn export -q ${repo_path} ${target}
+   svn export -q $3 $4 ${repo_path} ${target}
 }
 
 STEPNO=0
@@ -76,14 +81,17 @@ case "@host_os@" in
   *linux*)  ISA_ARCHIVE="${ISABELLE}_bundle_x86-linux.tar.gz"
             ISA_ARCHIVE_TYPE=tgz
             Z3_EXEC=x86-linux/z3
+            ADD_GMP_DLL=false
             ;;
   *cygwin*) ISA_ARCHIVE="${ISABELLE}_bundle_x86-cygwin.tar.gz"
             ISA_ARCHIVE_TYPE=tgz
             Z3_EXEC=x86-cygwin/z3-solver.exe
+            ADD_GMP_DLL=true
             ;;
   *darwin*) ISA_ARCHIVE="${ISABELLE}.dmg"
             ISA_ARCHIVE_TYPE=dmg
             Z3_EXEC=Z3-not-available-under-MacOSX
+            ADD_GMP_DLL=false
             ;;
   *) echo "unknown architecture: @host_os@" >&2; exit 3;;
 esac
@@ -108,6 +116,12 @@ case "$ISA_ARCHIVE_TYPE" in
        ;;
   *) echo "unknown archive type: $ISA_ARCHIVE_TYPE" >&2; exit 3;;
 esac
+if $ADD_GMP_DLL; then
+    (
+        cd $INSTDIR/lib/tlaps/$ISABELLE/contrib/polyml-5.4.0/x86-cygwin
+        svn_export "$SVN_PATH/misc/cyggmp-3.dll"
+    )
+fi
 echo "   [x] $ISABELLE extracted"
 
 cd "$INSTDIR/lib/tlaps"
@@ -162,19 +176,19 @@ echo "   [x] Built"
 
 ################################################################################
 
-CVC_VERS=2.4.1
-CVC3=CVC3-$CVC_VERS
+CVC3_VERS=2.4.1
+CVC3=CVC3-$CVC3_VERS
 banner "Downloading and packaging $CVC3"
 
 case "@host_os@" in
   *linux*)  CVC_DIR=linux32/
-            CVC_ARCHIVE="cvc3-$CVC_VERS-optimized-static.tar.gz"
+            CVC_ARCHIVE="cvc3-$CVC3_VERS-optimized-static.tar.gz"
             ;;
   *cygwin*) CVC_DIR=win32/
-            CVC_ARCHIVE="cvc3-$CVC_VERS-win32-optimized.tar.gz"
+            CVC_ARCHIVE="cvc3-$CVC3_VERS-win32-optimized.tar.gz"
             ;;
   *darwin*) CVC_DIR=
-            CVC_ARCHIVE="cvc3-$CVC_VERS.tar.gz"
+            CVC_ARCHIVE="cvc3-$CVC3_VERS.tar.gz"
             ;;
   *) echo "unknown architecture: @host_os@" >&2; exit 3;;
 esac
@@ -185,14 +199,14 @@ cd "$DOWNDIR"
 if test -f "$CVC_ARCHIVE" ; then
     echo "   [x] $CVC3 ALREADY downloaded"
 else
-    @WGET@ "http://cs.nyu.edu/acsys/cvc3/releases/$CVC_VERS/$CVC_DIR$CVC_ARCHIVE"
+    @WGET@ "http://cs.nyu.edu/acsys/cvc3/releases/$CVC3_VERS/$CVC_DIR$CVC_ARCHIVE"
     echo "   [x] $CVC3 distribution downloaded"
 fi
 
 case "@host_os@" in
   *darwin*)
     tar -C "$BUILDDIR" -xzf "$CVC_ARCHIVE"
-    ( cd "$BUILDDIR"/cvc3-"$CVC_VERS"
+    ( cd "$BUILDDIR"/cvc3-"$CVC3_VERS"
       ./configure --with-arith=native
       make
       cp bin/cvc3 "$INSTDIR/lib/tlaps/bin/"
@@ -202,11 +216,50 @@ case "@host_os@" in
     ;;
   *)
     tar -C "$BUILDDIR" -xzf "$CVC_ARCHIVE"
-    cp "$BUILDDIR"/cvc3-"$CVC_VERS"-*/bin/cvc3@EXE@ "$INSTDIR/lib/tlaps/bin/"
+    cp "$BUILDDIR"/cvc3-"$CVC3_VERS"-*/bin/cvc3@EXE@ "$INSTDIR/lib/tlaps/bin/"
 
     echo "   [x] $CVC3 extracted"
     ;;
 esac
+
+################################################################################
+
+LS4=ls4_v1.0.1
+banner "Downloading and building LS4"
+
+cd "$BUILDDIR"
+
+@WGET@ "http://www.mpi-inf.mpg.de/~suda/$LS4.zip"
+unzip -q -d ls4 "$LS4.zip"
+
+echo "   [x] Downloaded"
+
+( set -x
+  cd ls4/core
+  cc -c aiger.c
+  make
+  mkdir -p "$INSTDIR/lib/tlaps/bin"
+  cp ls4@EXE@ "$INSTDIR/lib/tlaps/bin/"
+) > ls4-build.log 2>&1
+echo "   [x] Built"
+
+################################################################################
+
+banner "Exporting and building the 'translate' utility"
+
+cd "$BUILDDIR"
+
+svn_export "$SVN_PATH/translate" translate
+echo "   [x] Exported"
+
+( set -x
+  cd translate
+  ./buildb.sh
+  mkdir -p "$INSTDIR/lib/tlaps/bin"
+  cp translate.bin "$INSTDIR/lib/tlaps/bin/translate@EXE@"
+  cp translate.bin "$INSTDIR/lib/tlaps/bin/ptl_to_trp@EXE@"
+) > translate-build.log 2>&1
+echo "   [x] Built"
 
 ################################################################################
 
@@ -399,7 +452,7 @@ open Unix
 open Str
 open Printf
 
-let output_dir = ref "tlaps-@VERSION@"
+let output_dir = ref "/usr/local"
 
 let fatal_error fmt =
   output_string Pervasives.stderr "FATAL ERROR: " ;

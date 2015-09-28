@@ -8,7 +8,7 @@
     2. to use Isabelle to check proofs output by TLAPM and Zenon.
 *)
 
-Revision.f "$Rev: 32551 $";;
+Revision.f "$Rev: 33896 $";;
 
 open Ext
 open Property
@@ -34,7 +34,7 @@ let cook x = "is" ^ pickle x
 
 let adj cx v =
   let cx = Ctx.push cx (pickle v.core) in
-  (cx, pickle (Ctx.string_of_ident (fst (Ctx.top cx))))
+  (cx, Ctx.string_of_ident (fst (Ctx.top cx)))
 
 let rec adjs cx = function
   | [] -> (cx, [])
@@ -65,6 +65,8 @@ let print_shape ff shp =
      for _i = 1 to n do fprintf ff "c => "; done;
      fprintf ff "c";
 ;;
+
+exception Unsupported of string;;
 
 let rec pp_apply sd cx ff op args = match op.core with
   | Ix n ->
@@ -121,10 +123,7 @@ let rec pp_apply sd cx ff op args = match op.core with
         | B.Setminus, [e ; f] -> binary "\\\\" e f
         | B.Cap, [e ; f] -> binary "\\<inter>" e f
         | B.Cup, [e ; f] -> binary "\\<union>" e f
-        | (B.Prime | B.StrongPrime), [e] -> begin
-           Errors.warn ~at:op "isabelle does not handle action reasoning - make sure to use a frontend that deals with actions";
-           failwith "Backend.Isabelle: Prime";
-         end
+        | (B.Prime | B.StrongPrime), [e] -> assert false
          (* prime handling was moved from the backends and TLAPM to action frontends *)
          (*  begin match e.core  with
              | Apply(op,args) ->
@@ -134,15 +133,10 @@ let rec pp_apply sd cx ff op args = match op.core with
                 else atomic (crypthash cx e)
              | _ ->  atomic (crypthash cx e)
            end *)
-        | B.Leadsto, [e; f] ->
-           Errors.warn ~at:op "TLAPM does not yet handle temporal logic.";
-           failwith "Backend.Isabelle: Leadsto";
-        | B.ENABLED, _ ->
-            Errors.warn ~at:op "TLAPM does not yet handle ENABLED.";
-            failwith "Backend.Isabelle: ENABLED";
-        | B.UNCHANGED, [e] ->
-           Errors.warn ~at:op "isabelle does not handle action reasoning - make sure to use a frontend that deals with actions";
-           failwith "Backend.Isabelle: UNCHANGED";
+        | B.Leadsto, [e; f] -> raise (Unsupported "Leadsto")
+        | B.ENABLED, _ -> raise (Unsupported "ENABLED")
+        | B.UNCHANGED, [e] -> assert false
+            (* UNCHANGED is now handled by the action front-end *)
             (* pp_print_expr sd cx ff
               (Apply (Internal B.Eq @@ e,
                       [ Apply (Internal B.StrongPrime @@ e, [e]) @@ e ; e ]) @@
@@ -151,12 +145,8 @@ let rec pp_apply sd cx ff op args = match op.core with
             binary (cook "\\cdot") e f
         | B.Actplus, [e ; f] ->
             binary (cook "-+->") e f
-        | B.Box _, [e] ->
-           Errors.warn ~at:op "TLAPM does not yet handle temporal logic.";
-           failwith "Backend.Isabelle: Box";
-        | B.Diamond, [e] ->
-           Errors.warn ~at:op "TLAPM does not yet handle temporal logic.";
-           failwith "Backend.Isabelle: Diamond";
+        | B.Box _, [e] -> raise (Unsupported "Box")
+        | B.Diamond, [e] -> raise (Unsupported "Diamond")
         | B.Nat, [] -> atomic "Nat"
         | B.Int, [] -> atomic "Int"
         | B.Real, [] -> atomic (cook "Real")
@@ -233,11 +223,7 @@ and fmt_expr sd cx e = match e.core with
       Fu.Big (fun ff -> ignore (pp_print_sequent sd cx ff sq))
   | With (e, _) ->
       fmt_expr sd cx e
-  | Let _ ->
-      Errors.warning := true;
-      Errors.set e "LET not supported by Isabelle/TLA+";
-      Util.eprintf ~at:e "LET not supported by Isabelle/TLA+" ;
-      failwith "Backend.Isabelle.fmt_expr"
+  | Let _ -> raise (Unsupported "LET")
   | List (Refs, []) ->
       fmt_expr sd cx (Internal Builtin.TRUE @@ e)
   | List (Refs, [e]) ->
@@ -295,20 +281,11 @@ and fmt_expr sd cx e = match e.core with
               assert false
       end
   | Tquant (q, vs, e) ->
-      (*let (ecx, vs) = adjs cx vs in
       let rep = match q with
         | Forall -> "\\\\AA"
         | Exists -> "\\\\EE"
       in
-      Fu.Big (fun ff ->
-                fprintf ff "%s %a : %a"
-                  rep (pp_print_delimited pp_print_string) vs
-                  (pp_print_expr sd ecx) e)*)
-      Errors.warning := true;
-      Errors.set e "TLAPM does not handle yet temporal quantifiers";
-      Util.eprintf ~at:e "cannot handle temporal quantifiers" ;
-      failwith "Backend.Isabelle.fmt_expr"
-
+      raise (Unsupported rep)
 
   | Choose (v, None, e) ->
       let (ecx, v) = adj cx v in
@@ -337,15 +314,8 @@ and fmt_expr sd cx e = match e.core with
                 fprintf ff "setOfAll(%a, %%%s. %a)"
                   (pp_print_expr sd cx) dom
                   v (pp_print_expr sd ecx) e)
-  | SetOf (_, _ :: _) ->
-      Errors.warning := true;
-      Errors.set e "SetOf: Isabelle/TLA+ cannot handle multiple bound variables";
-      Util.eprintf ~at:e "SetOf: Isabelle cannot handle multiple bound variables" ;
-      failwith "Backend.Isabelle.fmt_expr"
-  | SetOf _ ->
-      Errors.set e "SetOf: impossible";
-      Util.eprintf ~at:e "SetOf: impossible" ;
-      failwith "Backend.Isabelle.fmt_expr"
+  | SetOf (_, _ :: _) -> raise (Unsupported "SetOf (tuple)")
+  | SetOf _ -> assert false
   | SetEnum es ->
       Fu.Atm (fun ff ->
                 fprintf ff "{%a}"
@@ -356,11 +326,7 @@ and fmt_expr sd cx e = match e.core with
                 fprintf ff "[%a %s %a]"
                   (pp_print_bound sd cx) b "\\<mapsto>"
                   (pp_print_expr sd ecx) e)
-  | Fcn _ ->
-      Errors.warning := true;
-      Errors.set e "TLAPM cannot handle yet functions of more than one argument";
-      Util.eprintf ~at:e "functions of more than one argument not supported" ;
-      failwith "Backend.Isabelle.fmt_expr"
+  | Fcn _ -> raise (Unsupported "function (tuple)")
   | FcnApp (f, [e]) ->
       Fu.Atm begin
         fun ff ->
@@ -467,11 +433,7 @@ and fmt_expr sd cx e = match e.core with
         | n -> "Succ[" ^ uloop (n - 1) ^ "]"
       in
       Fu.Atm (fun ff -> fprintf ff "(%s)" (uloop (int_of_string m)))
-  | Num (m, n) ->
-      Errors.warning := true;
-      Errors.set e "TLAPM cannot yet handle real numbers";
-      Util.eprintf ~at:e "Isabelle cannot handle floating point numbers.";
-      failwith "floats"
+  | Num (m, n) -> raise (Unsupported "real constants")
   | At _ ->
       Errors.bug ~at:e "Backend.Isabelle: @"
   | Parens (e, _) ->
@@ -529,12 +491,18 @@ and pp_print_sequent_outer cx ff sq = match Deque.front sq.context with
             let (ncx, nm) = adj cx nm in
             fprintf ff "fixes %s@," nm ;
             pp_print_sequent_outer ncx ff { sq with context = hs }
-        | Fact (e, Visible) ->
+        | Fact (e, Visible, _) ->
             let ncx = Ctx.bump cx in
-            fprintf ff "assumes v'%d: \"%a\"@,"
-              (Ctx.length cx) (pp_print_expr false cx) e ;
+            begin try
+              let null = make_formatter (fun _ _ _ -> ()) (fun () -> ()) in
+              pp_print_expr false cx null e;  (* may raise Unsupported *)
+              fprintf ff "assumes v'%d: \"%a\"@,"
+                (Ctx.length cx) (pp_print_expr false cx) e
+            with Unsupported msg ->
+              fprintf ff "(* omitted temporal assumption : %s *)@," msg
+            end;
             pp_print_sequent_outer ncx ff { sq with context = hs }
-        | Fact (_, _) ->
+        | Fact (_, _, _) ->
             let ncx = Ctx.bump cx in
             pp_print_sequent_outer ncx ff { sq with context = hs }
         | Defn ({ core = Operator (nm, _) | Instance (nm, _)
@@ -575,20 +543,17 @@ and pp_print_sequent_inner cx ff sq = match Deque.front sq.context with
             let ret = pp_print_sequent_inner ncx ff { sq with context = hs } in
             fprintf ff ")" ;
             ret
-        | Fact (e, Visible) ->
+        | Fact (e, Visible, _) ->
             let ncx = Ctx.bump cx in
               fprintf ff "(%a \\<Longrightarrow> " (pp_print_expr false cx) e ;
               (* OLD fprintf ff "(%a \\<Rightarrow> " (pp_print_expr false cx) e ; *)
             let ret = pp_print_sequent_inner ncx ff { sq with context = hs } in
             fprintf ff ")" ;
             ret
-        | Fact (_, _) ->
+        | Fact (_, _, _) ->
             let ncx = Ctx.bump cx in
             pp_print_sequent_inner ncx ff { sq with context = hs }
-        | Defn (df, _, _, _) ->
-            Errors.set df "Inner definitions not supported by Isabelle/TLA+";
-            Util.eprintf ~at:df "Inner definitions not supported by Isabelle/TLA+" ;
-            failwith "Backend.Isabelle.pp_print_sequent_inner"
+        | Defn (df, _, _, _) -> raise (Unsupported "Inner definition")
     end
 
 type obx = obligation * string list * int * int
@@ -671,14 +636,18 @@ let thy_close thy thyout =
 ;;
 
 (* Make theory file for proving (isabelle as normal back-end). *)
-(* FIXME get rid of the buffer and write directoy to the file *)
+(* FIXME get rid of the buffer and write directly to the file *)
 let thy_temp ob tac tempname thyout =
   thy_header ~verbose:false tempname thyout;
   let obid = Option.get ob.id in
   let obfp = Option.default "no fingerprint" ob.fingerprint in
   Printf.fprintf thyout "lemma ob'%d: (* %s *)\n" obid obfp;
   let ff = Format.formatter_of_out_channel thyout in
-  pp_print_expr true Ctx.dot ff (Sequent ob.obl.core @@ nowhere);
+  begin try
+    pp_print_expr true Ctx.dot ff (Sequent ob.obl.core @@ nowhere);
+  with Unsupported msg ->
+    failwith ("isabelle : unsupported operator " ^ msg)
+  end;
   Format.pp_print_flush ff ();
   Printf.fprintf thyout "(is \"PROP ?ob'%d\")\n" obid;
   Printf.fprintf thyout "proof -\n";

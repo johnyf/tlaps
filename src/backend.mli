@@ -46,6 +46,7 @@ end;;
 module Toolbox : sig
   val toolbox_print :
     Proof.T.obligation ->
+    ?temp:bool ->
     string ->
     string option ->
     string option ->

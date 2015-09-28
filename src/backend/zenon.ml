@@ -6,7 +6,7 @@
 
 (** Zenon backend *)
 
-Revision.f "$Rev: 32466 $";;
+Revision.f "$Rev: 33896 $";;
 
 open Ext
 open Format
@@ -31,10 +31,20 @@ include (Isabelle : sig
            val crypthash : ctx -> expr -> string
          end)
 
+exception Unsupported of string;;
+let unsupp o = raise (Unsupported o);;
+
 let rec pp_apply sd cx ff op args = match op.core with
   | Ix n ->
-      let id = lookup_id cx n in
-      pp_apply sd cx ff { op with core = Opaque id } args
+     let id = lookup_id cx n in
+     begin match args with
+     | [] ->
+        pp_print_string ff id
+     | _ ->
+        fprintf ff "(%s %a)" id
+                (pp_print_delimited ~sep:pp_print_space (pp_print_expr sd cx))
+                args
+     end
   | Opaque id -> begin
      match args with
      | [] ->
@@ -55,11 +65,6 @@ let rec pp_apply sd cx ff op args = match op.core with
         pp_print_string ff "(-. " ;
         doit () ;
         pp_print_string ff ")"
-      and unsupp o =
-        Errors.warning := true;
-        Errors.set op ("TLAPM does not handle "^o);
-        Util.eprintf ~at:op "%s not supported" o ;
-        failwith "Backend.Zenon.pp_apply"
       in match b, args with
       | B.TRUE, [] -> atomic "T."
       | B.FALSE, [] -> atomic "F."
@@ -82,11 +87,7 @@ let rec pp_apply sd cx ff op args = match op.core with
       | B.Setminus, [e ; f] -> nonatomic "TLA.setminus" [e ; f]
       | B.Cap, [e ; f] -> nonatomic "TLA.cap" [e ; f]
       | B.Cup, [e ; f] -> nonatomic "TLA.cup" [e ; f]
-      | (B.Prime | B.StrongPrime), [e] -> begin
-           Errors.warning := true;
-           Errors.set op ("zenon does not handle action reasoning - make sure to use a frontend that deals with actions");
-           failwith "action reasoning in backend zenon"
-         end
+      | (B.Prime | B.StrongPrime), [e] -> assert false
          (* prime handling was moved from the backends and TLAPM to action frontends *)
          (* begin match e.core  with
             | Apply(op,args) -> begin if (List.fold_left (fun a b -> a && b) true (List.map Expr.Constness.is_const args))
@@ -95,23 +96,18 @@ let rec pp_apply sd cx ff op args = match op.core with
             | _ ->  atomic (crypthash cx e)
           end*)
 
-      | B.Leadsto, [e ; f] -> begin
-           Errors.warning := true;
-           Errors.set op ("TLAPM does not handle yet temporal logic");
-           failwith "temporal logic"
-         end
+      | B.Leadsto, [e ; f] -> unsupp "Leadsto"
       | B.ENABLED, [e] -> unsupp "ENABLED"
-      | B.UNCHANGED, [e] ->
-           Errors.warn ~at:op "zenon does not handle action reasoning - make sure to use a frontend that deals with actions";
-           failwith "Backend.Zenon: UNCHANGED";
+      | B.UNCHANGED, [e] -> assert false
+          (* UNCHANGED handling was moved to the front-end *)
           (*pp_print_expr sd cx ff
             (Apply (Internal B.Eq @@ e,
                     [ Apply (Internal B.StrongPrime @@ e, [e]) @@ e ; e ]) @@ e)
 *)
       | B.Cdot, [e ; f] -> nonatomic (cook "\\cdot") [e ; f]
       | B.Actplus, [e ; f] -> nonatomic (cook "-+->") [e ; f]
-      | B.Box _, [e] -> begin Errors.warning := true; Errors.set op ("TLAPM does not handle yet temporal logic");failwith "temporal logic" end (*nonatomic "TLA.box" [e]*)
-      | B.Diamond, [e] -> begin Errors.warning := true; Errors.set op ("TLAPM does not handle yet temporal logic");failwith "temporal logic" end (*nonatomic (cook "<>") [e]*)
+      | B.Box _, [e] -> unsupp "[]"
+      | B.Diamond, [e] -> unsupp "<>"
 
       | B.Nat, [] -> atomic "arith.N"
       | B.Int, [] -> atomic "arith.Z"
@@ -191,7 +187,7 @@ and fmt_expr sd cx e =
     | Sequent sq -> begin
         match Deque.front sq.context with
           | None -> fmt_expr sd cx sq.active
-          | Some ({core = Fact (e, Visible)}, hs) ->
+          | Some ({core = Fact (e, Visible, _)}, hs) ->
               let ncx = bump cx in
               Fu.Big (fun ff ->
                         fprintf ff "(=> %a %a)" (pp_print_expr sd cx) e
@@ -216,7 +212,7 @@ and fmt_expr sd cx e =
               Fu.Big (fun ff ->
                         fprintf ff "(A. ((%s) %a))" nm
                           (pp_print_expr sd ncx) (Sequent { sq with context = hs } @@ e))
-          | Some ({core = Fact (_, Hidden)}, hs) ->
+          | Some ({core = Fact (_, Hidden, _)}, hs) ->
               let ncx = bump cx in
               fmt_expr sd ncx (Sequent { sq with context = hs } @@ e)
           | _ ->
@@ -233,7 +229,8 @@ and fmt_expr sd cx e =
                     (pp_print_expr sd cx) f
                     (pp_print_expr sd cx) g)
     | List (Refs, []) ->
-        fmt_expr sd cx (Internal Builtin.TRUE @@ e)
+             Errors.bug ~at:e "Backend.Zenon.fmt_exp: internal error (List)"
+        (* fmt_expr sd cx (Internal Builtin.TRUE @@ e) *)
     | List (Refs, [e]) ->
         fmt_expr sd cx e
     | List (q, es) ->
@@ -280,11 +277,7 @@ and fmt_expr sd cx e =
                 end
             | _ -> assert false
         end
-    | Tquant _ ->
-        Errors.warning := true;
-        Errors.set e "TLAPM does not handle yet temporal quantifiers";
-        Util.eprintf ~at:e "cannot handle temporal quantifiers" ;
-        failwith "Backend.Zenon.fmt_expr"
+    | Tquant _ -> unsupp "\\AA or \\EE"
     | Choose (v, None, e) ->
         let (ecx, v) = adj cx v in
         Fu.Big begin fun ff ->
@@ -314,11 +307,7 @@ and fmt_expr sd cx e =
                     (pp_print_boundset sd cx) (b @@ e)
                     (pp_print_boundvar cx) b
                     (pp_print_expr sd ecx) e)
-    | SetOf _ ->
-        Errors.warning := true;
-        Errors.set e "TLAPM does not handle multiple bounds in set-of construct";
-        Util.eprintf ~at:e "cannot handle multiple bounds in set-of construct" ;
-        failwith "Backend.Zenon.fmt_expr"
+    | SetOf _ -> unsupp "Setof (tuple)"
     | SetEnum [] -> Fu.Atm (fun ff -> fprintf ff "TLA.emptyset")
     | SetEnum es ->
         Fu.Big (fun ff ->
@@ -333,11 +322,7 @@ and fmt_expr sd cx e =
                     (pp_print_boundset sd cx) (b @@ e)
                     (pp_print_boundvar cx) b
                     (pp_print_expr sd ecx) e)
-    | Fcn _ ->
-        Errors.warning := true;
-        Errors.set e "TLAPM does not handle functions of more than one argument";
-        Util.eprintf ~at:e "functions of more than one argument not supported" ;
-        failwith "Backend.Zenon.fmt_expr"
+    | Fcn _ -> unsupp "Fcn (tuple)"
     | FcnApp (f, [e]) ->
         Fu.Atm begin
           fun ff ->
@@ -384,11 +369,7 @@ and fmt_expr sd cx e =
                )
     | Except (e1, [([Except_dot f], e2)]) ->
         fmt_expr sd cx (Except (e1, [([Except_apply (String f @@ e)], e2)]) @@ e)
-    | Except _ ->
-        Errors.warning := true;
-        Errors.set e "TLAPM does not handle complex EXCEPT";
-        Util.eprintf ~at:e "cannot handle complex EXCEPT" ;
-        failwith "Backend.Zenon.fmt_expr"
+    | Except _ -> unsupp "complex EXCEPT"
     | Dot (re, f) ->
         fmt_expr sd cx (FcnApp (re, [String f @@ e]) @@ e)
     | Tuple es ->
@@ -407,34 +388,9 @@ and fmt_expr sd cx e =
         Fu.Atm (fun ff ->
                   fprintf ff "(TLA.Product (TLA.tuple %a))"
                     (pp_print_delimited ~sep:pp_print_space (pp_print_expr sd cx)) es)
-    | Sub (q, e, f) ->
-        Fu.Atm (fun ff ->
-                  fprintf ff "(%s %a %a)"
-                    (match q with
-                       | Box -> cook "a'box'sub"
-                       | _ -> cook "a'dia'sub")
-                    (pp_print_expr sd cx) e
-                    (pp_print_expr sd cx) f)
-    | Tsub (q, e, f) ->
-        (*Errors.set e "TLAPM does not handle yet temporal logic";
-        Util.eprintf ~at:e "cannot handle temporal logic" ;
-        failwith "Zenon.temporal"*)
-          Fu.Atm (fun ff ->
-                  fprintf ff "(%s %a %a)"
-                    (match q with
-                       | Box -> cook "a'box'tsub"
-                       | _ -> cook "a'dia'tsub")
-                    (pp_print_expr sd cx) e
-                    (pp_print_expr sd cx) f)
-
-    | Fair (q, e, f) ->
-        Fu.Big (fun ff ->
-                  fprintf ff "(%s %a %a)"
-                    (match q with
-                       | Weak -> cook "a'wf"
-                       | _ -> cook "a'sf")
-                    (pp_print_expr sd cx) e
-                    (pp_print_expr sd cx) f)
+    | Sub (q, e, f) -> unsupp "Sub"
+    | Tsub (q, e, f) -> unsupp "Tsub"
+    | Fair (q, e, f) -> unsupp "Fair"
 
     | Expr.T.Case (arms, oth) ->
         let pp_case ff (e1, e2) =
@@ -455,11 +411,7 @@ and fmt_expr sd cx e =
           | n -> "(TLA.fapply TLA.Succ " ^ uloop (n - 1) ^ ")"
         in
         Fu.Atm (fun ff -> fprintf ff "%s" (uloop (int_of_string m)))
-    | Num _ ->
-        Errors.warning := true;
-        Errors.set e "TLAPM does not handle yet real numbers";
-        Util.eprintf ~at:e "cannot handle real numbers" ;
-        failwith "Backend.Zenon.fmt_expr"
+    | Num _ -> unsupp "Real number constants"
     | At _ ->
         Errors.bug ~at:e "Backend.Zenon.fmt_exp: encountered @"
     | Parens (e, _) ->
@@ -506,16 +458,25 @@ and pp_print_sequent cx ff sq =
      let (ncx, nm) = adj cx nm in
      if h = Visible then fprintf ff "; usable definition %s suppressed@." nm;
      pp_print_sequent ncx ff {sq with context = hs}
-  | Some ({core = Fact (e, Visible)}, hs) ->
+  | Some ({core = Fact (e, Visible, _)}, hs) ->
      let ncx = bump cx in
-     fprintf ff "$hyp \"v'%d\" %a@\n" (length cx) (pp_print_expr false cx) e;
+     begin try
+       let null = make_formatter (fun _ _ _ -> ()) (fun () -> ()) in
+       pp_print_expr false cx null e; (* may raise Unsupported *)
+       fprintf ff "$hyp \"v'%d\" %a@\n" (length cx) (pp_print_expr false cx) e;
+     with Unsupported msg ->
+       fprintf ff "; omitted temporal assumption : %s @." msg;
+     end;
      pp_print_sequent ncx ff {sq with context = hs}
-  | Some ({core = Fact (_, Hidden)}, hs) ->
+  | Some ({core = Fact (_, Hidden, _)}, hs) ->
      let ncx = bump cx in
      pp_print_sequent ncx ff {sq with context = hs}
 ;;
 
 let pp_print_obligation ff ob =
   fprintf ff ";; obligation #%d@\n" (Option.get ob.id);
-  pp_print_sequent dot ff ob.obl.core;
+  try
+    pp_print_sequent dot ff ob.obl.core;
+  with Unsupported msg ->
+    failwith ("Zenon: unsupported operator " ^ msg)
 ;;

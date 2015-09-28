@@ -138,71 +138,10 @@ THEOREM Invariance == Spec => []Inv
          DidNotVoteAt, TypeOK, VotesSafe, OneValuePerBallot,
          SafeAt, NoneOtherChoosableAt, CannotVoteAt
   <2>2. CASE Next
-    <3>1. ASSUME NEW a \in Acceptor, NEW b \in Ballot, IncreaseMaxBal(a, b)
-          PROVE  Inv'
-      BY  <1>2, <2>2, <3>1, QuorumAssumption, SMT 
-      DEFS TypeOK, CannotVoteAt, DidNotVoteAt, VotesSafe,
-           OneValuePerBallot, SafeAt, NoneOtherChoosableAt, IncreaseMaxBal
-    <3>2. ASSUME NEW a \in Acceptor, NEW b \in Ballot, NEW v \in Value,
-                 VoteFor(a, b, v)
-          PROVE  Inv'
-      <4>3. OneValuePerBallot'
-\**        BY <1>2, <2>2, <3>2, Z3 DEF OneValuePerBallot
-        <5> SUFFICES ASSUME NEW a1 \in Acceptor, NEW a2 \in Acceptor,
-                            NEW b1 \in Nat,
-                            NEW v1 \in Value, NEW v2 \in Value,
-                            <<b1, v1>> \in votes'[a1],
-                            <<b1, v2>> \in votes'[a2]
-                     PROVE  v1 = v2
-          BY DEF OneValuePerBallot
-        <5>2. CASE a1 # a /\ a2 # a
-          BY <1>2, <5>2, <3>2, SMT DEF OneValuePerBallot
-        <5>3. CASE b1 # b
-          BY <1>2, <5>3, <3>2, SMT DEF OneValuePerBallot
-        <5>4. CASE a1 = a /\ a2 # a /\ b1 = b
-          <6>1. v1 = v
-            <7>1. <<b, v1>> \notin votes[a1]
-              BY <5>4, <3>2
-            <7> QED
-              BY <5>4, <3>2, <7>1, SMT
-          <6>2. v2 = v
-            <7>1. <<b,v2>> \in votes[a2]
-              BY <5>4, <3>2, SMT
-            <7> QED
-              BY <5>4, <3>2, <7>1, IsaM("force")
-          <6>. QED
-            BY <6>1, <6>2
-        <5>5. CASE a1 # a /\ a2 = a /\ b1 = b
-          <6>1. v2 = v
-            <7>1. <<b, v2>> \notin votes[a2]
-              BY <5>5, <3>2
-            <7> QED
-              BY <5>5, <3>2, <7>1, SMT
-          <6>2. v1 = v
-            <7>1. <<b,v1>> \in votes[a1]
-              BY <5>5, <3>2, SMT
-            <7> QED
-              BY <5>5, <3>2, <7>1, IsaM("force")
-          <6>. QED
-            BY <6>1, <6>2
-        <5>6. CASE a1 = a /\ a2 = a /\ b1 = b
-          <6>1. <<b, v1>> \notin votes[a1]
-            BY <5>6, <3>2
-          <6>2. <<b, v2>> \notin votes[a2]
-            BY <5>6, <3>2
-          <6> QED
-            BY <5>6, <3>2, <6>1, <6>2, SMT
-        <5> QED
-          BY <5>2, <5>3, <5>4, <5>5, <5>6
-      <4>4. QED
-        BY <1>2, <2>2, <3>2, <4>3, TypeOK, ShowsSafety, VotesSafe, QuorumAssumption, Z3 
-        DEFS TypeOK, VotesSafe, DidNotVoteAt, CannotVoteAt, NoneOtherChoosableAt, SafeAt
-    <3>3. QED
-      BY <3>1, <3>2, <2>2, SMT DEF Next
   <2>3. QED
     BY <2>1, <2>2, <1>2, SMT
 <1>3. QED
-  PROOF OMITTED
+  BY <1>1, <1>2, PTL DEF Spec
 
 ----------------------------------------------------------------------------
 
@@ -224,16 +163,7 @@ THEOREM Spec /\ Inv => C!Spec
              \/ \E v \in Value : VoteFor(a, b, v)
       BY <2>1 DEF Next
     <3>2. CASE IncreaseMaxBal(a, b)
-\*      BY <2>1, <3>2, QuorumAssumption, OneVoteThm, Z3
-\*      DEF Inv, TypeOK, IncreaseMaxBal,
-\*        chosen, ChosenAt, Ballot, VotedFor, VoteFor
-\*\*        VotesSafe, OneValuePerBallot, ShowsSafeAt, DidNotVoteAt, 
-\*\*        SafeAt, NoneOtherChoosableAt, CannotVoteAt
     <3>3. CASE \E v \in Value : VoteFor(a, b, v)
-\*      BY <2>1, <3>3, QuorumAssumption,  VotesSafeImpliesConsistency, Z3T(30)
-\*      DEF Inv, TypeOK, chosen, ChosenAt, VotedFor, Ballot, VoteFor,
-\*        VotesSafe, OneValuePerBallot, ShowsSafeAt, DidNotVoteAt, SafeAt, 
-\*        NoneOtherChoosableAt, CannotVoteAt
     <3>q. QED
       BY <3>1, <3>2, <3>3, SMT
   <2>q. QED

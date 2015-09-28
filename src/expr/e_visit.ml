@@ -7,7 +7,7 @@
 
 (** default visitors *)
 
-Revision.f "$Rev: 28687 $";;
+Revision.f "$Rev: 33173 $";;
 
 open Ext
 open Property
@@ -28,8 +28,8 @@ let hyp_rename v h = begin match h.core with
                 | Instance (_, i) -> Instance (v, i)
                 | Bpragma (_, e, l) -> Bpragma (v, e, l)},
             wd, vis, ex)
-  | Fact (e, vis) ->
-      Fact (e, vis)
+  | Fact (e, vis, tm) ->
+      Fact (e, vis, tm)
 end @@ h
 
 type 's scx = 's * hyp Deque.dq
@@ -211,8 +211,8 @@ class virtual ['s] map = object (self : 'self)
         let df = self#defn scx df in
         let h = Defn (df, wd, vis, ex) @@ h in
         (adj scx h, h)
-    | Fact (e, vis) ->
-        let h = Fact (self#expr scx e, vis) @@ h in
+    | Fact (e, vis, tm) ->
+        let h = Fact (self#expr scx e, vis, tm) @@ h in
         (adj scx h, h)
 
   method hyps scx hs = match Dq.front hs with
@@ -388,7 +388,7 @@ class virtual ['s] iter = object (self : 'self)
             ()
         | Defn (df, _, _, _) ->
             ignore (self#defn scx df)
-        | Fact (e, vis) ->
+        | Fact (e, _, _) ->
             self#expr scx e
     end ; adj scx h
 

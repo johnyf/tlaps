@@ -150,4 +150,11 @@ THEOREM
 THEOREM TLAInvariance == TypeOK /\ Inv /\ [Next]_vars => TypeOK' /\ Inv'
 BY Invariance DEF TypeOK, Inv, Next, ProcSet, p, vars
 
+(***************************************************************************)
+(* The following theorem asserts that the mutual exclusion property is     *)
+(* always verified by the system.                                          *)
+(***************************************************************************)
+THEOREM Safety == Spec => []MutualExclusion
+  BY Initialization, TLAInvariance, Mutex, PTL DEF Spec
+
 =============================================================================

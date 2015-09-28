@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 28687 $";;
+Revision.f "$Rev: 33173 $";;
 
 open Ext
 open Property
@@ -198,7 +198,7 @@ and app_hyp s h = match h.core with
   | Fresh (x, shp, lv, b) -> Fresh (x, shp, lv, app_dom s b) @@ h
   | Flex v -> Flex v @@ h
   | Defn (d, wd, us, ex) -> Defn (app_defn s d, wd, us, ex) @@ h
-  | Fact (e, us) -> Fact (app_expr s e, us) @@ h
+  | Fact (e, us,tm) -> Fact (app_expr s e, us,tm) @@ h
 
 and app_dom s = function
   | Unbounded -> Unbounded
@@ -242,7 +242,7 @@ let extract sq k =
   in try begin
     let (h, hs) = scan 0 sq.context in
     let e = match h.core with
-      | Fact (e, _) -> app_expr (shift (Deque.size hs)) e
+      | Fact (e, _, _) -> app_expr (shift (Deque.size hs)) e
       | _ -> failwith "exprtract" in
     let (s, hs) = app_hyps (shift (-1)) hs in
     let sq = {

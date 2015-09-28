@@ -12,6 +12,7 @@ type t =
   | Cooper
   | Fail   (* FIXME remove ? *)
   | Cvc3T of float
+  | LS4 of float
   | Smt2lib of float
   | Smt2z3 of float
   | Smt3 of float
@@ -36,6 +37,7 @@ val pp_print_tactic : Format.formatter -> t -> unit;;
 
 (* *)
 val default_zenon_timeout : float;;
+val default_ls4_timeout : float;;
 val default_isabelle_timeout : float;;
 val default_isabelle_tactic : string;;
 val default_yices_timeout : float;;
@@ -45,6 +47,8 @@ val default_smt_timeout : float;;
 val default_smt2_timeout : float;;
 val default_spass_timeout : float;;
 val default_tptp_timeout :float;;
+
+val is_temporal : t -> bool;;
 
 type result =
   | Proved of string

@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 29999 $";;
+Revision.f "$Rev: 34605 $";;
 
 open Property
 open E_t
@@ -25,7 +25,7 @@ let hyp_is_named what h = match h.core with
                   | Bpragma(nm,_,_) | Recursive (nm, _)},
           _, _, _)
   -> nm.core = what
-  | Fact (_, _) ->
+  | Fact (_, _, _) ->
       what = "_"
 
 let standard_form ~cx ~dep ~wd op args = match wd with
@@ -44,7 +44,8 @@ let standard_form ~cx ~dep ~wd op args = match wd with
 class anon_sg = object (self : 'self)
   inherit [string list] Visit.map as super
 
-  method expr scx e = match e.core with
+  method expr scx e =
+    match e.core with
     | Bang ({core = Apply ({core = Opaque op}, args)}, sels) -> begin
         let sels = List.map (self#sel scx) sels in
         let args = List.map (self#expr scx) args in
@@ -111,30 +112,49 @@ class anon_sg = object (self : 'self)
       end
     | Bang (b, sels) ->
         self#expr scx (Bang (Apply (b, []) @@ b, sels) @@ e)
-    | Apply ({core = Opaque name}, args) -> begin
+    | Apply ({core = Opaque name}, args) ->
+      begin
         if List.mem name (fst scx) then begin
           Errors.err ~at:e
-            "Warning: %s is used as a fact within its own proof. \
-             It will be ignored.\n" name;
-        end;
-        let args = List.map (self#expr scx) args in
-        match Deque.find ~backwards:true (snd scx) (hyp_is_named name) with
-          | Some (dep, {core = Defn ({core = Operator (_, op)}, wd, _, _)}) ->
-              standard_form ~cx:(snd scx) ~dep:(dep + 1) ~wd:wd
-                (op.core @@ e) args
-          | Some (dep, _) ->
-              if args = [] then
-                Ix (dep + 1) @@ e
-              else
-                Apply (Ix (dep + 1) @@ e, args) @@ e
-          | None ->
-             Util.eprintf ~at:e "Operator \"%s\" not found" name ;
-             Errors.set e (Printf.sprintf "Operator \"%s\" not found" name);
-             failwith "Expr.Anon: 4"
-       end
+            "Warning: %s does not introduce any assumptions. \
+             It does not make sense to use it here.\n" name;
+          Internal (Builtin.TRUE) @@ e
+        end else begin
+          let args = List.map (self#expr scx) args in
+          match Deque.find ~backwards:true (snd scx) (hyp_is_named name) with
+            | Some (dep, {core = Defn ({core = Operator (_, op)} as opc,
+                                       wd, _, _)}) ->
+                standard_form ~cx:(snd scx) ~dep:(dep + 1) ~wd:wd
+                  (op.core @@ e $$ opc) args
+            | Some (dep, opc) ->
+                if args = [] then
+                  Ix (dep + 1) @@ e $$ opc
+                else
+                  Apply (Ix (dep + 1) @@ e, args) @@ e $$ opc
+            | None ->
+               Util.eprintf ~at:e "Operator \"%s\" not found" name ;
+               Errors.set e (Printf.sprintf "Operator \"%s\" not found" name);
+               failwith "Expr.Anon: 4"
+        end
+      end
     | Opaque _ -> self#expr scx (Apply (e, []) @@ e)
     | Parens (e, {core = Syntax}) -> self#expr scx e
     | _ -> super#expr scx e
+
+  method hyp scx h = match h.core with
+    | Fact (e, vis, NotSet) ->
+      let adj (s, cx) h =
+        (s, Deque.snoc cx h) in
+        let e = self#expr scx e in
+        let h = Fact (e, vis, E_temporal_props.compute_time (snd scx) e) @@ h in
+        (adj scx h, h)
+    | Fact (e, vis, ts) ->
+      let adj (s, cx) h =
+        (s, Deque.snoc cx h) in
+        let e = self#expr scx e in
+        let h = Fact (e, vis, ts) @@ h in
+        (adj scx h, h)
+    | _ -> super#hyp scx h
 
   method pform scx pf = match pf.core with
     | Nlabel (l, ns) ->

@@ -1,6 +1,6 @@
 (* Test of subexpression references from Leslie Lamport *)
 ---- MODULE SubrefLL_test ----
-EXTENDS Integers
+EXTENDS Integers, TLAPS
 
 CONSTANT C
 ASSUME c4 == C = 4

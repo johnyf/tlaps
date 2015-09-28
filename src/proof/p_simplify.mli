@@ -14,4 +14,4 @@ open Expr.T
 
 open P_t
 
-val simplify : hyp dq -> expr -> proof -> proof
+val simplify : hyp dq -> expr -> proof -> time -> proof

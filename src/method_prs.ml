@@ -4,7 +4,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 29868 $";;
+Revision.f "$Rev: 32860 $";;
 
 (* FIXME we should remove this way of specifying methods and instead use
    the new (*{ by (prover: "foo"; timeout: x) }*) syntax. *)
@@ -43,6 +43,7 @@ and isa_method = lazy begin
              isa_verit;
              isa_spass;
              isa_tptp;
+             isa_ls4;
            ]
   <<< punct ")"
 end
@@ -76,6 +77,9 @@ and isa_yices =
 
 and isa_z3 =
   ident "z3" <!> Z33 default_z3_timeout
+
+and isa_ls4 =
+  ident "ls4" <!> LS4 default_ls4_timeout
 
 and isa_cooper =
   (ident "cooper" <|> ident "presburger") <!> Cooper

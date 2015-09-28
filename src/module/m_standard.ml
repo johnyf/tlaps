@@ -5,7 +5,7 @@
  * Copyright (C) 2008-2010  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 30956 $";;
+Revision.f "$Rev: 33455 $";;
 
 open Ext
 open Property
@@ -59,8 +59,8 @@ let naturals =
         binary  "^"     B.Exp ;
         binary  "<"     B.Lt ;
         binary  ">"     B.Gt ;
-        binary  "\\leq" B.Lteq ;
-        binary  "\\geq" B.Gteq ;
+        binary  "=<"    B.Lteq ;
+        binary  ">="    B.Gteq ;
         binary  "%"     B.Remainder ;
         binary  "\\div" B.Quotient ;
         binary  ".."    B.Range

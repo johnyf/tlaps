@@ -153,16 +153,19 @@ module T : sig
     | Fresh of hint * shape * kind * hdom
     | Flex of hint
     | Defn of defn * wheredef * visibility * export
-    | Fact of expr * visibility
+    | Fact of expr * visibility * time
 
   and hdom = Unbounded | Bounded of expr * visibility
 
-  and wheredef = Builtin | Proof | User
+  and wheredef = Builtin | Proof of time | User
 
   and export = Local | Export
 
   and visibility = Visible | Hidden
-  ;;
+
+  and time = Now | Always | NotSet
+
+  val get_val_from_id : 'hyp Deque.dq -> int -> 'hyp;;
   val hyp_name : hyp -> string;;
   val exprify_sequent : sequent -> expr_;;
 end;;
@@ -182,11 +185,12 @@ module Fmt : sig
   val pp_print_shape : Format.formatter -> shape -> unit
   val pp_print_bound :
     ctx -> Format.formatter -> string * expr option -> unit
-  val pp_print_expr : ctx -> Format.formatter -> expr -> unit
+  val fmt_expr : ?temp:bool -> ctx -> expr -> Tla_parser.Fu.exp
+  val pp_print_expr : ?temp:bool -> ctx -> Format.formatter -> expr -> unit
   val pp_print_defn : ctx -> Format.formatter -> defn -> ctx
   val pp_print_defns : ctx -> Format.formatter -> defn list -> ctx
-  val pp_print_sequent : ctx -> Format.formatter -> sequent -> ctx
-  val pp_print_hyp : ctx -> Format.formatter -> hyp -> ctx
+  val pp_print_sequent : ?temp:bool -> ctx -> Format.formatter -> sequent -> ctx
+  val pp_print_hyp : ?temp:bool -> ctx -> Format.formatter -> hyp -> ctx
   val pp_print_instance : ctx -> Format.formatter -> instance -> unit
   val string_of_expr : hyp Deque.dq  -> expr -> string
 end;;
@@ -199,6 +203,7 @@ module Subst : sig
   val scons : expr -> sub -> sub
   val bumpn : int -> sub -> sub
   val bump : sub -> sub
+  val compose : sub -> sub -> sub
   val app_ix : sub -> int wrapped -> expr
   val normalize : ?cx:hyp Deque.dq -> expr -> expr list -> expr_
   val app_expr : sub -> expr -> expr
@@ -256,9 +261,57 @@ module Deref : sig
   val badexp : T.expr;;
 end;;
 
+module Leibniz : sig
+  open T
+  val is_leibniz : 'a Property.wrapped -> int -> bool
+  class virtual leibniz_visitor : object
+  inherit [unit] Visit.map
+    method expr     : unit Visit.scx -> expr -> expr
+    method pform    : unit Visit.scx -> pform -> pform
+    method sel      : unit Visit.scx -> sel -> sel
+    method sequent  : unit Visit.scx -> sequent -> unit Visit.scx * sequent
+    method defn     : unit Visit.scx -> defn -> defn
+    method defns    : unit Visit.scx -> defn list -> unit Visit.scx * defn list
+    method bounds   : unit Visit.scx -> bound list -> unit Visit.scx * bound list
+    method bound    : unit Visit.scx -> bound -> unit Visit.scx * bound
+    method exspec   : unit Visit.scx -> exspec -> exspec
+    method instance : unit Visit.scx -> instance -> instance
+    method hyp      : unit Visit.scx -> hyp -> unit Visit.scx * hyp
+    method hyps     : unit Visit.scx -> hyp Deque.dq -> unit Visit.scx * hyp Deque.dq
+  end
+end;;
+
 module Constness : sig
+  open T
   val is_const : 'a Property.wrapped -> bool
-  val propagate : unit Visit.map
+  class virtual const_visitor : object
+  inherit [unit] Visit.map
+    method expr     : unit Visit.scx -> expr -> expr
+    method pform    : unit Visit.scx -> pform -> pform
+    method sel      : unit Visit.scx -> sel -> sel
+    method sequent  : unit Visit.scx -> sequent -> unit Visit.scx * sequent
+    method defn     : unit Visit.scx -> defn -> defn
+    method defns    : unit Visit.scx -> defn list -> unit Visit.scx * defn list
+    method bounds   : unit Visit.scx -> bound list -> unit Visit.scx * bound list
+    method bound    : unit Visit.scx -> bound -> unit Visit.scx * bound
+    method exspec   : unit Visit.scx -> exspec -> exspec
+    method instance : unit Visit.scx -> instance -> instance
+    method hyp      : unit Visit.scx -> hyp -> unit Visit.scx * hyp
+    method hyps     : unit Visit.scx -> hyp Deque.dq -> unit Visit.scx * hyp Deque.dq
+  end
+end;;
+
+module Tla_norm : sig
+  val expand_unchanged : unit Visit.scx -> T.expr -> T.expr
+  val expand_action : unit Visit.scx -> T.expr -> T.expr
+  val expand_leadsto : unit Visit.scx -> T.expr -> T.expr
+  val expand_fairness : unit Visit.scx -> T.expr -> T.expr
+end;;
+
+
+module Temporal_props : sig
+  val compute_time : T.hyp Deque.dq -> T.expr -> T.time
+  val check_time_change : T.hyp Deque.dq -> T.time -> T.time
 end;;
 
 module Elab : sig

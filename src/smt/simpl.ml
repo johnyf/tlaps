@@ -8,7 +8,7 @@
  * Copyright (C) 2011-2012  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32384 $";;
+Revision.f "$Rev: 33161 $";;
 
 open Ext
 open Property
@@ -18,6 +18,7 @@ open Expr.Subst
 open Expr.Visit
 
 open Printf
+open List
 
 open Typesystem
 open Smtcommons
@@ -35,8 +36,8 @@ type 'a mut_list =  {
 external inj : 'a mut_list -> 'a list = "%identity"
 
 let sort_unique cmp lst =
-  let sorted = List.sort ~cmp:cmp lst in
-  let fold first rest = List.fold_left
+  let sorted = sort ~cmp:cmp lst in
+  let fold first rest = fold_left
     (fun (acc, last) elem ->
        if (cmp last elem) = 0 then (acc, elem)
         else (elem::acc, elem)
@@ -49,7 +50,7 @@ let sort_unique cmp lst =
    | hd::tl ->
    begin
     let rev_result, _ = fold hd tl in
-    List.rev rev_result
+    rev rev_result
    end
 
 let split_at index = function
@@ -76,7 +77,7 @@ let split_at index = function
     one of the ids in the list vs. Expression e can be only an non-basic (that 
     is, abstracted) expression. *)
 let rec bounded vs cx e =
-    let boundeds vs cx es = List.exists (bounded vs cx) es in
+    let boundeds vs cx es = exists (bounded vs cx) es in
 (* Util.eprintf "bounded %d in %a" vs (print_prop ()) (opaque cx e) ; *)
     match e.core with
     | Ix n -> n <= vs
@@ -89,7 +90,7 @@ let rec bounded vs cx e =
         | _ :: bs -> bound_bs bs
         | [] -> false
         in
-        (* let n = List.length bs in *)
+        (* let n = length bs in *)
         let ex = app_expr (scons (Opaque "" @@ e) (shift 0)) ex in      (** FIX: only replaces Ix 1 by Opaque "" instead of all bs *)
 (* Util.eprintf "bounded' %d in %a" vs (print_prop ()) (opaque cx ex) ; *)
         bound_bs bs || bounded vs cx ex
@@ -98,15 +99,15 @@ let rec bounded vs cx e =
     | SetSt (h, d, ex)       -> bounded vs cx d || bounded vs (add_bs_ctx [h, Unknown, Domain d] cx) ex
     | Arrow (e1, e2) -> boundeds vs cx [e1;e2]
     | Dot (ex, _) -> bounded vs cx ex
-    | Record rs -> List.exists (fun (_,e) -> bounded vs cx e) rs
-    | Rect rs ->   List.exists (fun (_,e) -> bounded vs cx e) rs
+    | Record rs -> exists (fun (_,e) -> bounded vs cx e) rs
+    | Rect rs ->   exists (fun (_,e) -> bounded vs cx e) rs
     | Except (f, exspecs) ->
         let faux2 = function
         | Except_dot _ -> false
         | Except_apply e -> bounded vs cx e
         in
-        let faux exps ex = (List.fold_left (fun r e -> faux2 e || r) false exps) || bounded vs cx ex in
-        bounded vs cx f || List.fold_left (fun r (exps, ex) -> faux exps ex || r) false exspecs
+        let faux exps ex = (fold_left (fun r e -> faux2 e || r) false exps) || bounded vs cx ex in
+        bounded vs cx f || fold_left (fun r (exps, ex) -> faux exps ex || r) false exspecs
     | If (c,t,f) -> boundeds vs cx [c ; t ; f]
     | _ -> false
 ;;
@@ -114,7 +115,7 @@ let rec bounded vs cx e =
 (** nonbasic_vars e: returns the list of already abstracted variables 
     (non_basic_ops) that appear in the expression e *)
 let rec nonbasic_vars e : string list =
-    let nbvs es = List.fold_left (fun r e -> nonbasic_vars e @ r) [] es in
+    let nbvs es = fold_left (fun r e -> nonbasic_vars e @ r) [] es in
     match e.core with
     | Opaque s -> if SMap.mem s !nonbasic_ops then [s] else []
     | Ix _ | Internal _ | String _ | Num _  -> []
@@ -129,21 +130,21 @@ let rec nonbasic_vars e : string list =
         nonbasic_vars ex @ nonbasic_vars_bs bs
     | SetSt (_, e1, e2) | Arrow (e1, e2) -> nbvs [e1 ; e2]
     | Dot (ex, _) -> nonbasic_vars ex
-    | Record rs | Rect rs -> nbvs (List.map (fun (_,e) -> e) rs)
+    | Record rs | Rect rs -> nbvs (map (fun (_,e) -> e) rs)
     | Except (f, exspecs) ->
         let faux2 = function
         | Except_dot _ -> []
         | Except_apply e -> nonbasic_vars e
         in
-        let faux exps ex = (List.fold_left (fun r e -> faux2 e @ r) [] exps) @ nonbasic_vars ex in
-        nonbasic_vars f @ List.fold_left (fun r (exps, ex) -> faux exps ex @ r) [] exspecs
+        let faux exps ex = (fold_left (fun r e -> faux2 e @ r) [] exps) @ nonbasic_vars ex in
+        nonbasic_vars f @ fold_left (fun r (exps, ex) -> faux exps ex @ r) [] exspecs
     | If (c, t, f) -> nbvs [c ; t ; f]
     | _ -> []
 ;;
 
 let add_nonbasic_op s cx e = 
 (* Util.eprintf "++Add_nonbasic_op: %s <- %a : %s" s (print_prop ()) ((* opaque ~strong:true cx *) e) (typ_to_str e) ; *)
-(* List.iter (fun (k,(cx,e)) -> Util.eprintf "  !nonbasic_op: %s -> %a : %s" k (print_prop ()) (opaque ~strong:true cx e) (typ_to_str e)) (SMap.bindings !nonbasic_ops) ; *)
+(* iter (fun (k,(cx,e)) -> Util.eprintf "  !nonbasic_op: %s -> %a : %s" k (print_prop ()) (opaque ~strong:true cx e) (typ_to_str e)) (SMap.bindings !nonbasic_ops) ; *)
   nonbasic_ops := SMap.add s (cx,e) !nonbasic_ops ;
 ;;
 let remove_nonbasic_op s =
@@ -152,9 +153,9 @@ let remove_nonbasic_op s =
 ;;
 let find_nonbasic_op_id cx e =
 (* Util.eprintf ">>find_nonbasic_op_id %a" (print_prop ()) ((* opaque ~strong:true cx *) e) ; *)
-(* List.iter (fun (k,(cx,e)) -> Util.eprintf " all nbop: %s -> %a : %s" k (print_prop ()) (opaque ~strong:true cx e) (typ_to_str e)) (SMap.bindings !nonbasic_ops) ; *)
+(* iter (fun (k,(cx,e)) -> Util.eprintf " all nbop: %s -> %a : %s" k (print_prop ()) (opaque ~strong:true cx e) (typ_to_str e)) (SMap.bindings !nonbasic_ops) ; *)
   try let v,_ = 
-    List.find begin fun (_,(cx',e')) ->
+    find begin fun (_,(cx',e')) ->
 (* Util.eprintf "\t  nbop1: %a : %s" (print_prop ()) (opaque ~strong:true cx e) (typ_to_str e) ; *)
 (* Util.eprintf "\t  nbop2: %a : %s" (print_prop ()) (opaque ~strong:true cx' e') (typ_to_str e') ; *)
       (* cx = cx' && *)
@@ -168,7 +169,7 @@ let find_nonbasic_op_id cx e =
     let v = nonbasic_prefix ^ (fresh_id ()) in
     (* let v = if free_vars cx e = [] then fof_id_vars true v else v in  *)
     let fv = free_vars cx e in
-    (* List.iter (fun v -> Printf.eprintf "fv: %s\n" v) fv ; *)
+(* Printf.eprintf "fv: %s\n" (String.concat "," fv) ; *)
     let v = fof_id_vars (fv <> []) v in 
     add_nonbasic_op v cx e ;
     add_choose v cx e ;
@@ -178,7 +179,7 @@ let find_nonbasic_op_id cx e =
 ;; 
 
 let rec abstract cx e : Expr.T.expr =
-(* Printf.eprintf "nbops: %s -- " (String.concat "." (List.map (fun (s,_) -> s) (SMap.bindings !nonbasic_ops))) ; *)
+(* Printf.eprintf "nbops: %s -- " (String.concat "." (map (fun (s,_) -> s) (SMap.bindings !nonbasic_ops))) ; *)
 (* Util.eprintf "abstract: %a : %s" (print_prop ()) (opaque cx e) (typ_to_str e) ; *)
     let mk x = { e with core = x } in
     let mc x = if is_conc e then assign (noprops x) isconc () else noprops x in
@@ -191,18 +192,18 @@ let rec abstract cx e : Expr.T.expr =
       (** ss = nonbasic vars, not repeated, and that are bounded by this quantifier *)
       nonbasic_vars ex                                                        (** ss = [a__5,a__7,...] *)
       |> remove_repeated
-      |> List.map (fun s -> let cx,e = SMap.find s !nonbasic_ops in s,cx,e)   (** ss = [a__5,cx1,e1 ; a__7,cx2,e2 ; ...] *)
-      |> List.partition 
+      |> map (fun s -> let cx,e = SMap.find s !nonbasic_ops in s,cx,e)   (** ss = [a__5,cx1,e1 ; a__7,cx2,e2 ; ...] *)
+      |> partition 
           begin fun (id,cx,e) -> 
-            let d = List.length cx - List.length ecx in
+            let d = length cx - length ecx in
 (* Util.eprintf "search bounded by <%d in %a" (n+d) (print_prop ()) (opaque cx e) ; *)
             bounded (n + d) cx e
           end
     in
     let mk_defs ecx ss = 
-      List (And, List.map 
+      List (And, map 
         begin fun (id,cx,e) -> 
-          let d = List.length ecx - List.length cx in
+          let d = length ecx - length cx in
           let e = if d > 0 then app_expr (shift d) e else e in
           Apply (Internal B.Eq |> mb, [ Opaque id |> mc <<< typ e ; (* opaque cx' *) e ]) |> mb
         end ss) |> mb 
@@ -228,40 +229,40 @@ let rec abstract cx e : Expr.T.expr =
         (* let bs = abstract_bs cx bs in *)
         let ecx = add_bs_ctx bs cx in
         let ex = abstract ecx ex in
-        let n = List.length bs in
+        let n = length bs in
         (** ss = non_basic_ops bounded by this quantifier (or without free vars) *)
         let ss,nss = part_nonbvars ecx ex n in
-        (* List.iter begin fun (id,cx',e') ->
+        (* iter begin fun (id,cx',e') ->
           nonbasic_ops := SMap.add (fof_id_vars true id) (cx',e') (SMap.remove id !nonbasic_ops)
           end 
         ss ; *)
-        List.iter begin fun (id,cx',e') ->
+        iter begin fun (id,cx',e') ->
           (** Shift the non_basic_ops *not* bounded by this quantifier. *)
           let (_,cx') = split_at n cx' in
           let e' = app_expr (shift (0 - n)) e' in
           nonbasic_ops := SMap.add id (cx',e') (SMap.remove id !nonbasic_ops)
           end 
         nss ;
-(* List.iter (fun (k,(cx,e)) -> Util.eprintf "  [nonbasic_op: %s -> %a : %s" k (print_prop ()) (opaque ~strong:true cx e) (typ_to_str e)) (SMap.bindings !nonbasic_ops) ; *)
+(* iter (fun (k,(cx,e)) -> Util.eprintf "  [nonbasic_op: %s -> %a : %s" k (print_prop ()) (opaque ~strong:true cx e) (typ_to_str e)) (SMap.bindings !nonbasic_ops) ; *)
         let ex = if ss = [] then ex else begin
           let eqs = mk_defs ecx ss in
-          List.iter (fun (s,_,_) -> remove_nonbasic_op s) ss ;
+          iter (fun (s,_,_) -> remove_nonbasic_op s) ss ;
           let hs,ex = deimpl ex in
           let hs = eqs @ hs in            
           let hs = match hs with [h] -> h | _ -> List (And, hs) |> mb in
-          let ss = List.map (fun (s,_,e) -> (assign (s |> mc <<< typ e) boundvar ()), Unknown, No_domain) ss in
+          let ss = map (fun (s,_,e) -> (assign (s |> mc <<< typ e) boundvar ()), Unknown, No_domain) ss in
           Apply (Internal B.Implies |> mb, [hs ; ex]) |> mb 
-            |> app_expr (shift (List.length ss))
+            |> app_expr (shift (length ss))
             |> fun ex -> Quant (Forall, ss, ex) |> mb
           (* let ex = Typeinfer.paint_types cx ex in *)
           end
         in 
         Quant (q, bs, ex) |> mb
-    | List (b, es) ->   List (b, List.map (abstract cx) es) |> mb
-    | FcnApp (f, es) -> FcnApp (abstract cx f, List.map (abstract cx) es) |> mk
-    | Record rs ->      Record (List.map (fun (s,e) -> s, abstract_bool cx e) rs) |> mk
-    | Tuple es ->       Tuple (List.map (abstract_bool cx) es) |> mk
-    | Apply (e, es) ->  Apply (abstract cx e, List.map (abstract cx) es) |> mk
+    | List (b, es) ->   List (b, map (abstract cx) es) |> mb
+    | FcnApp (f, es) -> FcnApp (abstract cx f, map (abstract cx) es) |> mk
+    | Record rs ->      Record (map (fun (s,e) -> s, abstract_bool cx e) rs) |> mk
+    | Tuple es ->       Tuple (map (abstract_bool cx) es) |> mk
+    | Apply (e, es) ->  Apply (abstract cx e, map (abstract cx) es) |> mk
     | Dot (ex,h) ->     Dot (abstract cx ex,h) |> mk
     | If (c,t,f) ->
         begin match !mode with 
@@ -273,7 +274,7 @@ let rec abstract cx e : Expr.T.expr =
     let f = function
     | (v, k, Domain d) -> (v, k, Domain (abstract cx d))
     | b -> b
-    in List.map f bs *)
+    in map f bs *)
 ;;
 
 (** r_term ::= <Id/Opaque symbol> | r_term(r_term,..,r_term) | Prime (r_term) | FcnApp (r_term, _) *)
@@ -281,7 +282,7 @@ let rec is_rewrite_term e =
     match e.core with
     | Ix _ | Opaque _ -> true
     (* | Apply ({core = Internal B.Prime}, [ex]) -> is_rewrite_term ex *)
-    | Apply (ex, es) -> List.for_all is_rewrite_term (ex :: es)
+    | Apply (ex, es) -> for_all is_rewrite_term (ex :: es)
     | FcnApp (ex, _) -> is_rewrite_term ex
     | Internal B.Prime
     | Internal B.Len
@@ -319,14 +320,14 @@ let simpl_eq cx hs =
         | (h, k, Domain dom) -> (h, k, Domain (rep cx dom))
         | b -> b
         in
-        let rep_bs cx bs = List.map (rep_bound cx) bs in
-        let reps cx es = List.map (rep cx) es in
+        let rep_bs cx bs = map (rep_bound cx) bs in
+        let reps cx es = map (rep cx) es in
         let rep_exspec cx exs = 
             let faux cx = function
             | Except_dot s -> Except_dot s
             | Except_apply ea -> Except_apply (rep cx ea)
             in
-            List.map (fun (eps,ex) -> List.map (faux cx) eps, rep cx ex) exs
+            map (fun (eps,ex) -> map (faux cx) eps, rep cx ex) exs
         in
         let rep_opt cx = function
         | None -> None
@@ -347,10 +348,10 @@ let simpl_eq cx hs =
             | Apply ({core = Internal B.Prime}, _) -> e
             | Apply (e,es)    -> Apply (rep cx e, reps cx es) |> mk 
             | List (b,es)     -> List (b, reps cx es) |> mk
-            | Quant (q, bs, ex)   -> let bs = List.map (rep_bound cx) bs in Quant (q, bs, rep ~shift:(List.length bs) (add_bs_ctx bs cx) ex) |> mk
-            | Expr.T.Fcn (bs, ex) -> let bs = List.map (rep_bound cx) bs in Expr.T.Fcn (bs, rep ~shift:(List.length bs) (add_bs_ctx bs cx) ex) |> mk
-            | SetOf (ex, bs)      -> let bs = List.map (rep_bound cx) bs in SetOf (rep ~shift:(List.length bs) (add_bs_ctx bs cx) ex, bs) |> mk
-            | SetSt (h, dom, ex)  -> let bs = List.map (rep_bound cx) [h, Unknown, Domain dom] in SetSt (h, rep cx dom, rep ~shift:(List.length bs) (add_bs_ctx bs cx) ex) |> mk
+            | Quant (q, bs, ex)   -> let bs = map (rep_bound cx) bs in Quant (q, bs, rep ~shift:(length bs) (add_bs_ctx bs cx) ex) |> mk
+            | Expr.T.Fcn (bs, ex) -> let bs = map (rep_bound cx) bs in Expr.T.Fcn (bs, rep ~shift:(length bs) (add_bs_ctx bs cx) ex) |> mk
+            | SetOf (ex, bs)      -> let bs = map (rep_bound cx) bs in SetOf (rep ~shift:(length bs) (add_bs_ctx bs cx) ex, bs) |> mk
+            | SetSt (h, dom, ex)  -> let bs = map (rep_bound cx) [h, Unknown, Domain dom] in SetSt (h, rep cx dom, rep ~shift:(length bs) (add_bs_ctx bs cx) ex) |> mk
             | Except (f, [([Except_apply e1],e2)]) -> Except (rep cx f, [([Except_apply (rep cx e1)], (rep cx e2))]) |> mk
             | SetEnum es      -> SetEnum (reps cx es) |> mk
             | Tuple es        -> Tuple   (reps cx es) |> mk
@@ -359,10 +360,10 @@ let simpl_eq cx hs =
             | Arrow (e1,e2)   -> Arrow   (rep cx e1, rep cx e2) |> mk
             | Except (f, exs) -> Except  (rep cx f, rep_exspec cx exs) |> mk
             | Dot (ex, fd)    -> Dot     (rep cx ex, fd) |> mk
-            | Record rs       -> Record  (List.map (fun (s,e) -> s, rep cx e) rs) |> mk
-            | Rect rs         -> Rect    (List.map (fun (s,e) -> s, rep cx e) rs) |> mk
+            | Record rs       -> Record  (map (fun (s,e) -> s, rep cx e) rs) |> mk
+            | Rect rs         -> Rect    (map (fun (s,e) -> s, rep cx e) rs) |> mk
             | If (c,t,f)      -> If      (rep cx c, rep cx t, rep cx f) |> mk
-            | Case (es, o)    -> Case    (List.map (fun (c,e) -> (rep cx c, rep cx e)) es, rep_opt cx o) |> mk
+            | Case (es, o)    -> Case    (map (fun (c,e) -> (rep cx c, rep cx e)) es, rep_opt cx o) |> mk
             | Sequent seq     -> rep cx (unroll_seq seq)
             | Parens (ex,_)   -> rep cx ex
             | Choose (h,None,ex) ->
@@ -375,6 +376,7 @@ let simpl_eq cx hs =
     in
 
     let rec simp hs =
+      let ix_id x = match free_vars cx x with [a] -> a | _ -> "" in
         match hs with
         | [] -> []
         | h :: hs when is_conc h -> hs @ [h]
@@ -385,10 +387,10 @@ let simpl_eq cx hs =
             | Apply ({core = Internal B.Eq}, [_ ; {core = Choose _}]) -> 
 (* Util.eprintf "simpl_eq: %a" (print_prop ()) (opaque cx e') ; *)
                 simp (hs @ [e'])
-            | Apply ({core = Internal B.Eq}, [x ; y]) when is_rewrite_term x || is_rewrite_domain x ->
+            | Apply ({core = Internal B.Eq}, [x ; y]) when (is_rewrite_term x || is_rewrite_domain x) && not (mem (ix_id x) (free_vars cx y)) ->
 (* Util.eprintf "simpl_eq: %a" (print_prop ()) (opaque cx e') ; *)
                 discard := false ;
-                let hs = List.map (replace x y cx) hs in
+                let hs = map (replace x y cx) hs in
                 (** TODO: check that x is not a recursive definition! *)
                 if (not (is_rewrite_domain x)) && is_non_rewrite_expr y 
                 (* if !discard  *)

@@ -6,7 +6,7 @@
  * Copyright (C) 2011-2012  INRIA and Microsoft Corporation
  *)
 
-Revision.f "$Rev: 32604 $";;
+Revision.f "$Rev: 33161 $";;
 
 open Ext
 open Property
@@ -184,15 +184,13 @@ let rec assign_fmt req cx e : Expr.T.expr =
         | Bot,  Int,  Bot  -> If (c, assign_fmt Bot cx t,  assign_fmt Bot cx f) |> mk
         | Int,  Bot,  Int  -> If (c, assign_fmt Bot cx t,  assign_fmt Bot cx f) |> mk
         | Bot,  Bot,  Int  -> If (c, assign_fmt Bot cx t,  assign_fmt Bot cx f) |> mk
-        (* | Bool, Bool, Bool -> If (c, assign_fmt Bool cx t, assign_fmt Bool cx f) |> mk *)
+        | Bool, Bool, Bool -> If (c, assign_fmt Bool cx t, assign_fmt Bool cx f) |> mk
         | _,    Bool, Bool -> If (c, assign_fmt Bool cx t, assign_fmt Bool cx f) |> mk
         | Bot,  Bot,  Bool -> If (c, assign_fmt Bot cx t,  assign_fmt Bot cx f) |> mk
         | Bot,  Bool, Bot  -> If (c, assign_fmt Bot cx t,  assign_fmt Bot cx f) |> mk
         | Bool, Bool, Bot  -> If (c, assign_fmt Bot cx t,  assign_fmt Bot cx f) |> mk <<< applyu2bool
         | Bool, Bot,  Bool -> If (c, assign_fmt Bot cx t,  assign_fmt Bot cx f) |> mk <<< applyu2bool
-        (* | _, Bool, Bot  -> If (c, assign_fmt Bot cx t,  assign_fmt Bot cx f) |> mk <<< applyu2bool *)
-        (* | _, Bot,  Bool -> If (c, assign_fmt Bot cx t,  assign_fmt Bot cx f) |> mk <<< applyu2bool *)
-        (* | Bool, _,    _    -> If (c, assign_fmt Bot cx t,  assign_fmt Bot cx f) |> mk <<< applyu2bool *)
+        | Bool, _,    _    -> If (c, assign_fmt Bot cx t,  assign_fmt Bot cx f) |> mk <<< applyu2bool
         | _                -> If (c, assign_fmt Bot cx t,  assign_fmt Bot cx f) |> mk
         end
     | List (b, es) -> List (b, List.map (assign_fmt Bool cx) es) |> mk
@@ -201,7 +199,7 @@ let rec assign_fmt req cx e : Expr.T.expr =
         Quant (q, bs, assign_fmt Bool (add_bs_ctx bs cx) ex) |> mk
     | Record es -> Record (List.map (fun (f,e) -> f, assign_fmt Bot cx e) es) |> mk
     | Tuple es -> 
-        add_tuple (List.map (fun e -> if typ e = Int then Int else Bot) es) ;
+        (* add_tuple (List.map (fun e -> if typ e = Int then Int else Bot) es) ; *)
         Tuple (List.map (fun e -> assign_fmt (* (if typ e = Int then Int else Bot) *)Bot cx e) es) |> mk
     | _ -> e
     end

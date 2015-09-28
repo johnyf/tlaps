@@ -4,10 +4,8 @@
 
 (** A few system-related functions *)
 
-Revision.f "$Rev: 28687 $";;
+Revision.f "$Rev: 34678 $";;
 
-
-(*****************************************)
 
 (* Kill the process tree rooted at the given PID.  This is done by
    parsing the output of "ps x" (or "ps -l").  We don't use process

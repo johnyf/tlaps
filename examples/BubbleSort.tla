@@ -75,7 +75,7 @@ THEOREM IsPermOfExchange ==
              PROVE  AA(A, i, j) \in [1..N -> Int]  /\ IsPermOf(AA(A, i, j), A)
   OBVIOUS
 <1>1. AA(A,i,j) = A ** Exchange(i, j)
-  BY Z3  DEF **, Exchange, Id  
+  BY DEF **, Exchange, Id  
 <1>2. QED
   BY <1>1, ExchangeAPerm, Z3 DEF IsPermOf
 
@@ -85,7 +85,7 @@ THEOREM CompositionAssociative ==
 BY Z3 DEF **
 
 THEOREM CompositionOfPerms == \A f, g \in Perms : f ** g \in Perms
-BY Z3 DEF **, Perms
+BY DEF **, Perms
 
 THEOREM IsPermOfTransitive == 
           \A A, B, C \in [1..N -> Int] : 
@@ -207,50 +207,22 @@ THEOREM Spec => [](pc = "Done" => IsSorted(A) /\ IsPermOf(A, A0))
   <2> SUFFICES ASSUME Inv, Lbl_1 \/ Lbl_2 \* Next
                PROVE  Inv'
     <3>1. Inv /\ UNCHANGED vars => Inv'
-      BY Z3T(20)  DEF vars, TypeOK, RealInv, IsSorted, IsSortedTo, 
+      BY DEF vars, TypeOK, RealInv, IsSorted, IsSortedTo, 
                 IsSortedFromTo, IsPermOf, Perms, **
     <3>2. QED
       BY <3>1, Z3T(10) DEF Next 
   <2>1. TypeOK'
     BY Z3  DEF TypeOK, RealInv, Lbl_1, Lbl_2 
   <2>2. RealInv'
-    <3>1. CASE Lbl_1
-      <4>1. CASE i < N
-        BY <3>1, <4>1, Z3T(20) DEF Lbl_1, TypeOK, RealInv, IsSorted, IsSortedTo, 
-                      IsSortedFromTo, IsPermOf, Perms, **
-      <4>2. CASE i >= N
-        BY <3>1, <4>2, Z3T(200) DEF Lbl_1, TypeOK, RealInv, IsSorted, IsSortedTo, 
-                      IsSortedFromTo, IsPermOf, Perms, **
-      <4>3. QED
-        BY <4>1, <4>2, Z3 DEF TypeOK
-    <3>2. CASE Lbl_2
-      <4>1. CASE j > 1  /\  A[j-1] > A[j]
-        <5> /\ pc  =  "Lbl_2"
-            /\ A'  = [[A EXCEPT ![j  -  1] = A[j]] EXCEPT ![j] = A[j  -  1]]
-            /\ j'  =  j  -  1
-            /\ pc'  =  "Lbl_2"
-            /\ i'  =  i
-            /\ A0'  =  A0
-          BY <3>2, <4>1, Z3 DEF Lbl_2
-        <5> QED
-          BY <2>1, <4>1, IsPermOfExchange, IsPermOfTransitive, Z3 DEF IsSortedFromTo, IsSortedTo,  TypeOK, RealInv
-      <4>2. CASE ~(j > 1  /\  A[j-1] > A[j])
-        BY <3>2, <4>2, Z3T(500) DEF Lbl_2, TypeOK, RealInv, IsSorted, IsSortedTo, 
-                        IsSortedFromTo, IsPermOf, Perms, **
-      <4>3. QED
-        BY <4>1, <4>2
-    <3>3. QED
-      BY <3>1, <3>2
+    \* This part of the proof is left as a (difficult!) exercise
+    \* for the reader.
   <2>3. QED
     BY <2>1, <2>2 
 <1>3. Inv => (pc = "Done" => IsSorted(A) /\ IsPermOf(A, A0))
   BY DEF Inv, RealInv
 <1>4. QED
-  PROOF (*******************************************************************)
-        (* The theorem follows immediately from <1>1, <1>2, <1>3 and       *)
-        (* standard TLA temporal reasoning.                                *)
-        (*******************************************************************) 
-  OMITTED
+    BY <1>1,<1>2,<1>3,PTL DEF Spec
+
 -----------------------------------------------------------------------------
 (***************************************************************************)
 (* Except for writing the comments, writing this module, including         *)
@@ -258,7 +230,8 @@ THEOREM Spec => [](pc = "Done" => IsSorted(A) /\ IsPermOf(A, A0))
 (***************************************************************************)
 =============================================================================
 \* Modification History
-\* Last modified Tue Nov 27 14:02:04 CET 2012 by doligez
+\* Last modified Mon Mar 17 11:17:49 CET 2014 by doligez
+\* Last modified Fri Mar 07 15:24:43 CET 2014 by shaolin
 \* Last modified Tue Nov 27 13:33:10 CET 2012 by doligez
 \* Last modified Fri Nov 23 09:32:08 PST 2012 by lamport
 \* Created Wed Nov 21 11:50:58 PST 2012 by lamport

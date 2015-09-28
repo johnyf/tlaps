@@ -16,7 +16,7 @@ type inferAction =
 val type_inference : hyp list -> expr list -> unit ;;
 
 (* backend/smtground.ml *)
-val type_infer :  inferAction -> hyp list -> expr -> Typesystem.TLAtype.t ->Typesystem.TLAtype.t ;;
+val type_infer :  inferAction -> hyp list -> expr -> Typesystem.TLAtype.t -> Typesystem.TLAtype.t ;;
 val infer_facts_bounded : hyp list -> expr -> unit ;;
 
 val get_type : hyp list -> expr -> Typesystem.TLAtype.t ;;
@@ -28,3 +28,5 @@ val paint_types : hyp list -> expr -> expr ;;
 val paint_bs : hyp list -> bound list -> bound list ;;
 (* val tfind : 'a Property.wrapped -> string -> Typesystem.TLAtype.t ;; *)
 (* val typetree : hyp list -> expr -> unit ;; *)
+
+val boolify : expr -> expr ;;

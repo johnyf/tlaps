@@ -11,7 +11,7 @@ PROOF
                \E f \in [S -> SUBSET S] : Surj (f, SUBSET S)
         PROVE FALSE
         <2>. PICK f \in [S -> SUBSET S] : Surj (f, SUBSET S)
-              OBVIOUS
+              BY <1>1
         <2>2. ~ Surj (f, SUBSET S)
               <3>1. DEFINE D == {x \in S : x \notin f[x]}
               <3>2. D \in SUBSET S

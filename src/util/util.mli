@@ -86,3 +86,13 @@ val add_hook : (unit -> unit) ref -> ('a -> unit) -> 'a -> unit;;
     Adds to [cleanup] the action of calling [fn argument] before doing
     whatever was in [cleanup] already.
 *)
+
+exception Internal_timeout
+(** exception raised by the timer interrupt handler to prevent looping within
+    PM code. *)
+
+val run_with_timeout : float -> ('a -> 'b) -> 'a -> 'b option;;
+(** [run_with_timeout tmo f x]
+    Run [f] with argument [x], with a time limit of [tmo]. Return
+    [Some result] if [f] managed to finish before the timeout, or
+    [None] if it didn't. *)
