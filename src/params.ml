@@ -177,7 +177,7 @@ let verit =
   make_exec "veriT"
             "veriT --input=smtlib2 --disable-ackermann \
                    --disable-banner --disable-print-success \"$file\""
-            "echo unknown"
+            "veriT --version"
 ;;
 let spass = make_exec "SPASS" "SPASS -PGiven=0 -PProblem=0 -PStatistic=0 \"$file\"" "echo unknown";;
 let eprover = make_exec "eprover" "eprover --tstp-format --silent \"$file\"" "eprover --version";;
