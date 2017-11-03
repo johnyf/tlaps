@@ -154,7 +154,9 @@ let init () =
     "--method", Arg.String set_default_method,
                 "<meth> set default method to <meth> (try --method help)" ;
     "--solver", Arg.String set_smt_solver,
-                "<solver> set SMT solver to <solver>";
+                "<solver> set SMT solver to <solver>. \
+                Include arguments and \"$file\" \
+                in this command string.";
     "--fast-isabelle", Arg.Unit Params.set_fast_isabelle,
                        " (Windows-only) Launch Isabelle with fast shortcut";
     "--stretch", Arg.Set_float Params.timeout_stretch,
