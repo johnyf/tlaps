@@ -1,0 +1,14 @@
+tlapm
+Makefile
+src/alexer.ml
+src/config.ml
+src/load.ml
+src/tlapm.native
+tools/
+config.status
+*.annot
+*.cmi
+*.cmx
+*.o
+*.swp
+*.log
