@@ -174,8 +174,8 @@ let z3 =
               "z3 -version"
 ;;
 let verit =
-  make_exec "verit"
-            "verit --input=smtlib2 --disable-ackermann \
+  make_exec "veriT"
+            "veriT --input=smtlib2 --disable-ackermann \
                    --disable-banner --disable-print-success \"$file\""
             "echo unknown"
 ;;
