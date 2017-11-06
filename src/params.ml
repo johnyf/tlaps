@@ -162,7 +162,7 @@ let zenon =
 
 let cvc3 = make_exec "cvc3" "cvc3 -lang smt2 \"$file\"" "cvc3 -version";;
 (* let cvc3 = make_exec "cvc3" "cvc4 -L smt2 \"$file\"" "cvc4 --version";; *)
-let yices = make_exec "yices" "yices -tc \"$file\"" "yices --version";;
+let yices = make_exec "yices" "yices \"$file\"" "yices --version";;
 let z3 =
   if Sys.os_type = "Cygwin" then
     make_exec "z3"
