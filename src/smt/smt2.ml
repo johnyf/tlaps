@@ -1276,7 +1276,7 @@ let _fmt_smtlib fc cx e =
   let sorts,functions,axioms,distincts,_,hyps,conc = fmt_expr ~fcncheck:fc smtlib_map cx e in
   let to_sort = smtlib_map.print_sort in
   String.concat "\n" begin
-    [ "(set-logic UFLIA)" ] @
+    [ "(set-logic AUFNIRA)" ] @
     map (sprintf "(declare-sort %s 0)") sorts @
     [";; Declaration of terms, predicates and strings"] @
     map (fun (f,xs,r) -> sprintf "(declare-fun %s (%s) %s)" f (String.concat " " (map to_sort xs)) (to_sort r)) functions @
