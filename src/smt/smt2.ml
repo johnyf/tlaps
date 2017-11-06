@@ -1,7 +1,7 @@
 (*
  * backend/smt/smt2.ml --- SMT backend using an untyped encoding.
  *
- * Author: Hernán Vanzetto <hernan.vanzetto@inria.fr>
+ * Author: Hernï¿½n Vanzetto <hernan.vanzetto@inria.fr>
  *
  * Copyright (C) 2011-2012  INRIA and Microsoft Corporation
  *)
@@ -1276,7 +1276,7 @@ let _fmt_smtlib fc cx e =
   let sorts,functions,axioms,distincts,_,hyps,conc = fmt_expr ~fcncheck:fc smtlib_map cx e in
   let to_sort = smtlib_map.print_sort in
   String.concat "\n" begin
-    [ "(set-logic AUFNIRA)" ] @
+    [ "(set-logic UFLIA)" ] @
     map (sprintf "(declare-sort %s 0)") sorts @
     [";; Declaration of terms, predicates and strings"] @
     map (fun (f,xs,r) -> sprintf "(declare-fun %s (%s) %s)" f (String.concat " " (map to_sort xs)) (to_sort r)) functions @
