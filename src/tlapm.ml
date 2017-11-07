@@ -151,8 +151,10 @@ let toolbox_clean arr =
 let process_module mcx t =
   modules_list := t.core.name.core :: !modules_list;
   if t.core.important then begin
-    let tlapsdir = t.core.name.core ^ ".tlaps" in
+    let cachedir = "__tlacache__" in
+    let tlapsdir = cachedir ^ "/" ^ t.core.name.core ^ ".tlaps" in
     Params.output_dir := tlapsdir;
+    if not (Sys.file_exists cachedir) then Unix.mkdir cachedir 0o777;
     if not (Sys.file_exists tlapsdir) then Unix.mkdir tlapsdir 0o777;
   end;
 
