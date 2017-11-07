@@ -1305,15 +1305,15 @@ let _fmt_z3 fc cx e =
       (* "(set-option :print-warning false)" ; *)
       "(set-option :produce-models true)" ;
       (* "(set-option :produce-proofs true)" ; *)
-      "(set-option :pull-nested-quantifiers true)" ;
+      "(set-option :smt.pull-nested-quantifiers true)" ;
       "(set-option :auto-config false) " ;  (* disable automatic self configuration *)
       (*** Proving mode *)
-      "(set-option :mbqi true) " ; (* when true, enables model-based quantifier instantiation ; disables patterns *)
-      (* "(set-option :mbqi-max-iterations 1000)" ; *)
+      "(set-option :smt.mbqi true) " ; (* when true, enables model-based quantifier instantiation ; disables patterns *)
+      (* "(set-option :smt.mbqi.max-iterations 1000)" ; *)
       (* "(set-option :relevancy 2)" ;   (** 0=disabled, use when searching counterexamples. *) *)
       (* "(set-option :ematching true)" ; *)
       (*** Model generation mode *)
-      (* "(set-option :mbqi false) " ; (* when true, enables model-based quantifier instantiation ; disables patterns *) *)
+      (* "(set-option :smt.mbqi false) " ; (* when true, enables model-based quantifier instantiation ; disables patterns *) *)
       (* "(set-option :model-compact true)" ; *)
        ] @
     map (sprintf "(declare-sort %s 0)") sorts @
